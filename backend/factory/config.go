@@ -34,6 +34,7 @@ type Configuration struct {
 	Mongodb   *Mongodb    `yaml:"mongodb"`
 	RocEnd    *RocEndpt   `yaml:"managedByConfigPod,omitempty"` // fetch config during bootup
 	LteEnd    []*LteEndpt `yaml:"endpoints,omitempty"`          // LTE endpoints are configured and not auto-detected
+	Ui        *Ui         `yaml:"ui,omitempty"`
 	Mode5G    bool        `yaml:"mode5G,omitempty"`
 	SdfComp   bool        `yaml:"spec-compliant-sdf"`
 	CfgPort   int         `yaml:"cfgport,omitempty"`
@@ -61,4 +62,9 @@ type LteEndpt struct {
 	NodeType       string `yaml:"type,omitempty"`
 	ConfigPushUrl  string `yaml:"configPushUrl,omitempty"`
 	ConfigCheckUrl string `yaml:"configCheckUrl,omitempty"` // only for 4G components
+}
+
+type Ui struct {
+	Path      string `yaml:"path,omitempty"`
+	RouteName string `yaml:"routeName,omitempty"`
 }

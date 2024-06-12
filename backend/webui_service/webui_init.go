@@ -170,6 +170,9 @@ func (webui *WEBUI) Start() {
 	/* First HTTP Server running at port to receive Config from ROC */
 	subconfig_router := logger_util.NewGinWithLogrus(logger.GinLog)
 	configapi.AddServiceSub(subconfig_router)
+	if factory.WebUIConfig.Configuration.Ui != nil {
+		configapi.AddServiceUi(subconfig_router)
+	}
 	configapi.AddService(subconfig_router)
 
 	go metrics.InitMetrics()
