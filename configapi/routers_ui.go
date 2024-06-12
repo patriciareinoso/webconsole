@@ -15,6 +15,7 @@ import (
 func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group("/ui")
 
+	logger.WebUILog.Infoln("AddServiceUi")
 	routeName := factory.WebUIConfig.Configuration.Ui.RouteName
 	path := factory.WebUIConfig.Configuration.Ui.Path
 

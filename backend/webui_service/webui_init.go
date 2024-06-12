@@ -171,6 +171,7 @@ func (webui *WEBUI) Start() {
 	subconfig_router := logger_util.NewGinWithLogrus(logger.GinLog)
 	configapi.AddServiceSub(subconfig_router)
 	if factory.WebUIConfig.Configuration.Ui != nil {
+		initLog.Infoln("Entering Initialization UI")
 		configapi.AddServiceUi(subconfig_router)
 	}
 	configapi.AddService(subconfig_router)
