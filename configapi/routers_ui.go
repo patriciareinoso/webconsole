@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/omec-project/webconsole/backend/factory"
 	"github.com/omec-project/webconsole/backend/logger"
+	"net/http"
 )
 
 func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
@@ -21,8 +22,8 @@ func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
 
 	if routeName != "" && path != "" {
 		logger.WebUILog.Infoln("Add UI service")
-		group.Static(routeName, path)
-		//group.StaticFS(routeName, http.Dir(path))
+		//group.Static(routeName, path)
+		group.StaticFS(routeName, http.Dir(path))
 	} else {
 		logger.WebUILog.Infoln("UI service is not created")
 	}
