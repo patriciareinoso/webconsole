@@ -3,15 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/*
- * Connectivity Service Configuration
- *
- * APIs to configure connectivity service in Aether Network
- *
- * API version: 1.0.0
- *
- */
-
  package configapi
 
  import (
@@ -22,7 +13,7 @@
  )
  
  func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
-	group := engine.Group("/")
+	group := engine.Group("/ui")
 	logger.WebUILog.Infoln("Add UI service")
 	group.StaticFS("/", http.Dir("/ui"))
  
