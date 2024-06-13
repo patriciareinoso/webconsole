@@ -15,13 +15,14 @@ import (
 func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group("/ui")
 
-	logger.WebUILog.Infoln("AddServiceUi")
 	routeName := factory.WebUIConfig.Configuration.Ui.RouteName
 	path := factory.WebUIConfig.Configuration.Ui.Path
+	logger.WebUILog.Infoln("AddServiceUi route %s path %s", routeName, path)
 
 	if routeName != "" && path != "" {
 		logger.WebUILog.Infoln("Add UI service")
-		group.Static(routeName, path)
+		//group.Static(routeName, path)
+		group.StaticFS(routeName, http.Dir(path))
 	} else {
 		logger.WebUILog.Infoln("UI service is not created")
 	}
