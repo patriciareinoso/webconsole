@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/omec-project/webconsole/backend/factory"
 	"github.com/omec-project/webconsole/backend/logger"
+	"net/http"
 )
 
 func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
