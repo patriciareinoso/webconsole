@@ -3,25 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// +build ui
+//go:build !ui
+// +build !ui
 
- package configapi
+package configapi
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/omec-project/webconsole/backend/logger"
 )
 
-var UI = true
- 
 func AddServiceUi(engine *gin.Engine) *gin.RouterGroup {
-	group := engine.Group("/ui")
-	logger.WebUILog.Infoln("Add UI service")
-
-	group.StaticFS("/", http.Dir("/ui"))
- 
-	return group
- }
-
+	logger.WebUILog.Infoln("UI service will not be added")
+	return nil
+}

@@ -53,6 +53,10 @@ $(GO_BIN_PATH)/$(WEBCONSOLE): server.go  $(WEBCONSOLE_GO_FILES)
 
 vpath %.go $(addprefix $(GO_SRC_PATH)/, $(GO_NF))
 
+ui: server.go  $(WEBCONSOLE_GO_FILES)
+	@echo "Start building $(@F)...."
+	go build --tags ui -o $(ROOT_PATH)/$@ ./server.go 
+
 clean:
 	rm -rf $(WEBCONSOLE)/$(GO_BIN_PATH)/$(WEBCONSOLE)
 
@@ -83,7 +87,7 @@ docker-push:
 
 test: .coverage
 	docker run --rm -v $(CURDIR):/webconsole -w /webconsole golang:latest \
-		go test \
+		go test --tags ui \
 			-failfast \
 			-coverprofile=.coverage/coverage-unit.txt \
 			-covermode=atomic \
