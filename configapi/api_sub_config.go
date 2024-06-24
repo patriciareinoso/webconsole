@@ -268,7 +268,13 @@ func GetSampleJSON(c *gin.Context) {
 	c.JSON(http.StatusOK, subsData)
 }
 
-// Get all subscribers list
+// GetSubscribers godoc
+// @Summary      Show an account
+// @Description  Returns the list of subscribers
+// @Tags         Subscribers
+// @Accept       json
+// @Produce      json
+// @Router       /api/subscriber/ [get]
 func GetSubscribers(c *gin.Context) {
 	setCorsHeader(c)
 
@@ -295,7 +301,15 @@ func GetSubscribers(c *gin.Context) {
 	c.JSON(http.StatusOK, subsList)
 }
 
-// Get subscriber by IMSI(ueId))
+
+// GetSubscriber godoc
+// @Summary      Show an account
+// @Description  Get subscriber by IMSI(ueId)
+// @Tags         Subscribers
+// @Param        imsi path string true "IMSI (ueId)"
+// @Accept       json
+// @Produce      json
+// @Router       /api/subscriber/{imsi} [get]
 func GetSubscriberByID(c *gin.Context) {
 	setCorsHeader(c)
 
@@ -358,6 +372,14 @@ func GetSubscriberByID(c *gin.Context) {
 }
 
 // Post subscriber by IMSI(ueId)
+// @Summary Post subscriber by IMSI(ueId)
+// @Tags Subscribers
+// @Description Post subscriber by IMSI(ueId)
+// @Param imsi path string true "IMSI(ueId)"
+// @Success 200 {string} string "Subscriber created"
+// @Failure 400 {string} string "Invalid subscriber content"
+// @Failure 500 {string} string "Error creating subscriber"
+// @Router /api/subscriber/{imsi} [post]
 func PostSubscriberByID(c *gin.Context) {
 	setCorsHeader(c)
 
@@ -450,6 +472,14 @@ func PatchSubscriberByID(c *gin.Context) {
 }
 
 // Delete subscriber by IMSI(ueId)
+// @Summary Delete an existing subscriber by IMSI(ueId)
+// @Tags Subscribers
+// @Description Delete an existing Subscriber
+// @Param imsi path string true "IMSI(ueId)"
+// @Success 202 {string} string "Subscriber deleted successfully"
+// @Failure 400 {string} string "Invalid Subscriber name provided"
+// @Failure 500 {string} string "Error deleting Subscriber"
+// @Router /api/subscriber/{imsi} [delete]
 func DeleteSubscriberByID(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Delete One Subscriber Data")

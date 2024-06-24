@@ -35,7 +35,7 @@ func AddUiService(engine *gin.Engine) {
 }
 
 func isApiUrlPath(path string) bool{
-    return strings.HasPrefix(path, "/config/v1/") || strings.HasPrefix(path, "/api/");
+    return strings.HasPrefix(path, "/config/v1/") || strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/docs/");
 }
 
 

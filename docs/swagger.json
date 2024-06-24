@@ -1,0 +1,365 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is a sample server celler server.",
+        "title": "Webconsole API Documentation",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:5000",
+    "basePath": "/",
+    "paths": {
+        "/api/subscriber/": {
+            "get": {
+                "description": "Returns the list of subscribers",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscribers"
+                ],
+                "summary": "Show an account",
+                "responses": {}
+            }
+        },
+        "/api/subscriber/{imsi}": {
+            "get": {
+                "description": "Get subscriber by IMSI(ueId)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscribers"
+                ],
+                "summary": "Show an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IMSI (ueId)",
+                        "name": "imsi",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "post": {
+                "description": "Post subscriber by IMSI(ueId)",
+                "tags": [
+                    "Subscribers"
+                ],
+                "summary": "Post subscriber by IMSI(ueId)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IMSI(ueId)",
+                        "name": "imsi",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscriber created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid subscriber content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error creating subscriber",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete an existing Subscriber",
+                "tags": [
+                    "Subscribers"
+                ],
+                "summary": "Delete an existing subscriber by IMSI(ueId)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IMSI(ueId)",
+                        "name": "imsi",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Subscriber deleted successfully",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Subscriber name provided",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error deleting Subscriber",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/config/v1/device-group/": {
+            "get": {
+                "description": "Returns the list of device groups",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device Groups"
+                ],
+                "summary": "Show an account",
+                "responses": {}
+            }
+        },
+        "/config/v1/device-group/{deviceGroupName}": {
+            "get": {
+                "description": "Returns the device group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device Groups"
+                ],
+                "summary": "Show an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device Group Name",
+                        "name": "deviceGroupName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "post": {
+                "description": "Create a new Device Group",
+                "tags": [
+                    "Device Groups"
+                ],
+                "summary": "Create a new Device Group",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device Group Name",
+                        "name": "deviceGroupName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Device Group created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Device Group content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error creating Device Group",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete an existing Device Group",
+                "tags": [
+                    "Device Groups"
+                ],
+                "summary": "Delete an existing device group",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device Group Name",
+                        "name": "deviceGroupName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Device Group deleted successfully",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Device Groups name provided",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error deleting Device Group",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/config/v1/network-slice/": {
+            "get": {
+                "description": "Returns the list of network slices",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Network Slices"
+                ],
+                "summary": "Show an account",
+                "responses": {}
+            }
+        },
+        "/config/v1/network-slice/{sliceName}": {
+            "get": {
+                "description": "Returns the network slice",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Network Slices"
+                ],
+                "summary": "Show an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slice Name",
+                        "name": "sliceName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "post": {
+                "description": "Create a new network slice",
+                "tags": [
+                    "Network Slices"
+                ],
+                "summary": "Create a new network slice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slice Name",
+                        "name": "sliceName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Network slice created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid network slice content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error creating network slice",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete an existing network slice",
+                "tags": [
+                    "Network Slices"
+                ],
+                "summary": "Delete an existing network slice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slice Name",
+                        "name": "sliceName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Network slice deleted successfully",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid network slice name provided",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Error deleting network slice",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "externalDocs": {
+        "description": "OpenAPI",
+        "url": "https://swagger.io/resources/open-api/"
+    }
+}

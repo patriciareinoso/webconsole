@@ -30,7 +30,13 @@ const (
 	sliceDataColl    = "webconsoleData.snapshots.sliceData"
 )
 
-// GetDeviceGroups -
+// GetDeviceGroups godoc
+// @Summary      Show an account
+// @Description  Returns the list of device groups
+// @Tags         Device Groups
+// @Accept       json
+// @Produce      json
+// @Router       /config/v1/device-group/ [get]
 func GetDeviceGroups(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Get all Device Groups")
@@ -47,7 +53,14 @@ func GetDeviceGroups(c *gin.Context) {
 	c.JSON(http.StatusOK, deviceGroups)
 }
 
-// GetDeviceGroupsByName -
+// GetDeviceGroup godoc
+// @Summary      Show an account
+// @Description  Returns the device group
+// @Tags         Device Groups
+//  @Param       deviceGroupName path string true "Device Group Name"
+// @Accept       json
+// @Produce      json
+// @Router       /config/v1/device-group/{deviceGroupName} [get]
 func GetDeviceGroupByName(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Get Device Group by name")
@@ -67,7 +80,14 @@ func GetDeviceGroupByName(c *gin.Context) {
 	}
 }
 
-// DeviceGroupGroupNameDelete -
+// @Summary Delete an existing device group
+// @Tags Device Groups
+// @Description Delete an existing Device Group
+// @Param deviceGroupName path string true "Device Group Name"
+// @Success 202 {string} string "Device Group deleted successfully"
+// @Failure 400 {string} string "Invalid Device Groups name provided"
+// @Failure 500 {string} string "Error deleting Device Group"
+// @Router /config/v1/device-group/{deviceGroupName} [delete]
 func DeviceGroupGroupNameDelete(c *gin.Context) {
 	logger.ConfigLog.Debugf("DeviceGroupGroupNameDelete")
 	if ret := DeviceGroupDeleteHandler(c); ret == true {
@@ -93,7 +113,14 @@ func DeviceGroupGroupNamePatch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{})
 }
 
-// DeviceGroupGroupNamePost -
+// @Summary Create a new Device Group
+// @Tags Device Groups
+// @Description Create a new Device Group
+// @Param deviceGroupName path string true "Device Group Name"
+// @Success 200 {string} string "Device Group created"
+// @Failure 400 {string} string "Invalid Device Group content"
+// @Failure 500 {string} string "Error creating Device Group"
+// @Router /config/v1/device-group/{deviceGroupName} [post]
 func DeviceGroupGroupNamePost(c *gin.Context) {
 	logger.ConfigLog.Debugf("DeviceGroupGroupNamePost")
 	if ret := DeviceGroupPostHandler(c, configmodels.Post_op); ret == true {
@@ -103,7 +130,13 @@ func DeviceGroupGroupNamePost(c *gin.Context) {
 	}
 }
 
-// GetNetworkSlices -
+// GetNetworkSlices godoc
+// @Summary      Show an account
+// @Description  Returns the list of network slices
+// @Tags         Network Slices
+// @Accept       json
+// @Produce      json
+// @Router       /config/v1/network-slice/ [get]
 func GetNetworkSlices(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Get all Network Slices")
@@ -120,7 +153,14 @@ func GetNetworkSlices(c *gin.Context) {
 	c.JSON(http.StatusOK, networkSlices)
 }
 
-// GetNetworkSliceByName -
+// GetNetworkSlice godoc
+// @Summary      Show an account
+// @Description  Returns the network slice
+// @Tags         Network Slices
+//  @Param       sliceName path string true "Slice Name"
+// @Accept       json
+// @Produce      json
+// @Router       /config/v1/network-slice/{sliceName} [get]
 func GetNetworkSliceByName(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Get Network Slice by name")
@@ -140,7 +180,14 @@ func GetNetworkSliceByName(c *gin.Context) {
 	}
 }
 
-// NetworkSliceSliceNameDelete -
+// @Summary Delete an existing network slice
+// @Tags Network Slices
+// @Description Delete an existing network slice
+// @Param sliceName path string true "Slice Name"
+// @Success 202 {string} string "Network slice deleted successfully"
+// @Failure 400 {string} string "Invalid network slice name provided"
+// @Failure 500 {string} string "Error deleting network slice"
+// @Router /config/v1/network-slice/{sliceName} [delete]
 func NetworkSliceSliceNameDelete(c *gin.Context) {
 	logger.ConfigLog.Debugf("Received NetworkSliceSliceNameDelete ")
 	if ret := NetworkSliceDeleteHandler(c); ret == true {
@@ -150,7 +197,14 @@ func NetworkSliceSliceNameDelete(c *gin.Context) {
 	}
 }
 
-// NetworkSliceSliceNamePost -
+// @Summary Create a new network slice
+// @Tags Network Slices
+// @Description Create a new network slice
+// @Param sliceName path string true "Slice Name"
+// @Success 200 {string} string "Network slice created"
+// @Failure 400 {string} string "Invalid network slice content"
+// @Failure 500 {string} string "Error creating network slice"
+// @Router /config/v1/network-slice/{sliceName} [post]
 func NetworkSliceSliceNamePost(c *gin.Context) {
 	logger.ConfigLog.Debugf("Received NetworkSliceSliceNamePost ")
 	if ret := NetworkSlicePostHandler(c, configmodels.Post_op); ret == true {

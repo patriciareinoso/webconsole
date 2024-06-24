@@ -1,0 +1,247 @@
+basePath: /
+externalDocs:
+  description: OpenAPI
+  url: https://swagger.io/resources/open-api/
+host: localhost:5000
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is a sample server celler server.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Webconsole API Documentation
+  version: "1.0"
+paths:
+  /api/subscriber/:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of subscribers
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Subscribers
+  /api/subscriber/{imsi}:
+    delete:
+      description: Delete an existing Subscriber
+      parameters:
+      - description: IMSI(ueId)
+        in: path
+        name: imsi
+        required: true
+        type: string
+      responses:
+        "202":
+          description: Subscriber deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid Subscriber name provided
+          schema:
+            type: string
+        "500":
+          description: Error deleting Subscriber
+          schema:
+            type: string
+      summary: Delete an existing subscriber by IMSI(ueId)
+      tags:
+      - Subscribers
+    get:
+      consumes:
+      - application/json
+      description: Get subscriber by IMSI(ueId)
+      parameters:
+      - description: IMSI (ueId)
+        in: path
+        name: imsi
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Subscribers
+    post:
+      description: Post subscriber by IMSI(ueId)
+      parameters:
+      - description: IMSI(ueId)
+        in: path
+        name: imsi
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Subscriber created
+          schema:
+            type: string
+        "400":
+          description: Invalid subscriber content
+          schema:
+            type: string
+        "500":
+          description: Error creating subscriber
+          schema:
+            type: string
+      summary: Post subscriber by IMSI(ueId)
+      tags:
+      - Subscribers
+  /config/v1/device-group/:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of device groups
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Device Groups
+  /config/v1/device-group/{deviceGroupName}:
+    delete:
+      description: Delete an existing Device Group
+      parameters:
+      - description: Device Group Name
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      responses:
+        "202":
+          description: Device Group deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid Device Groups name provided
+          schema:
+            type: string
+        "500":
+          description: Error deleting Device Group
+          schema:
+            type: string
+      summary: Delete an existing device group
+      tags:
+      - Device Groups
+    get:
+      consumes:
+      - application/json
+      description: Returns the device group
+      parameters:
+      - description: Device Group Name
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Device Groups
+    post:
+      description: Create a new Device Group
+      parameters:
+      - description: Device Group Name
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Device Group created
+          schema:
+            type: string
+        "400":
+          description: Invalid Device Group content
+          schema:
+            type: string
+        "500":
+          description: Error creating Device Group
+          schema:
+            type: string
+      summary: Create a new Device Group
+      tags:
+      - Device Groups
+  /config/v1/network-slice/:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of network slices
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Network Slices
+  /config/v1/network-slice/{sliceName}:
+    delete:
+      description: Delete an existing network slice
+      parameters:
+      - description: Slice Name
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      responses:
+        "202":
+          description: Network slice deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid network slice name provided
+          schema:
+            type: string
+        "500":
+          description: Error deleting network slice
+          schema:
+            type: string
+      summary: Delete an existing network slice
+      tags:
+      - Network Slices
+    get:
+      consumes:
+      - application/json
+      description: Returns the network slice
+      parameters:
+      - description: Slice Name
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Show an account
+      tags:
+      - Network Slices
+    post:
+      description: Create a new network slice
+      parameters:
+      - description: Slice Name
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Network slice created
+          schema:
+            type: string
+        "400":
+          description: Invalid network slice content
+          schema:
+            type: string
+        "500":
+          description: Error creating network slice
+          schema:
+            type: string
+      summary: Create a new network slice
+      tags:
+      - Network Slices
+swagger: "2.0"
