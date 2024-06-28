@@ -1,0 +1,419 @@
+basePath: /
+definitions:
+  configmodels.DeviceGroups:
+    properties:
+      group-name:
+        type: string
+      imsis:
+        items:
+          type: string
+        type: array
+      ip-domain-expanded:
+        $ref: '#/definitions/configmodels.DeviceGroupsIpDomainExpanded'
+      ip-domain-name:
+        type: string
+      site-info:
+        type: string
+    type: object
+  configmodels.DeviceGroupsIpDomainExpanded:
+    properties:
+      dnn:
+        type: string
+      dns-primary:
+        type: string
+      dns-secondary:
+        type: string
+      mtu:
+        type: integer
+      ue-dnn-qos:
+        $ref: '#/definitions/configmodels.DeviceGroupsIpDomainExpandedUeDnnQos'
+      ue-ip-pool:
+        type: string
+    type: object
+  configmodels.DeviceGroupsIpDomainExpandedUeDnnQos:
+    properties:
+      bitrate-unit:
+        description: data rate unit for uplink and downlink
+        type: string
+      dnn-mbr-downlink:
+        description: downlink data rate
+        type: integer
+      dnn-mbr-uplink:
+        description: uplink data rate
+        type: integer
+      traffic-class:
+        allOf:
+        - $ref: '#/definitions/configmodels.TrafficClassInfo'
+        description: QCI/QFI for the traffic
+    type: object
+  configmodels.Slice:
+    properties:
+      application-filtering-rules:
+        items:
+          $ref: '#/definitions/configmodels.SliceApplicationFilteringRules'
+        type: array
+      site-device-group:
+        items:
+          type: string
+        type: array
+      site-info:
+        $ref: '#/definitions/configmodels.SliceSiteInfo'
+      slice-id:
+        $ref: '#/definitions/configmodels.SliceSliceId'
+      sliceName:
+        type: string
+    type: object
+  configmodels.SliceApplicationFilteringRules:
+    properties:
+      action:
+        description: action
+        type: string
+      app-mbr-downlink:
+        type: integer
+      app-mbr-uplink:
+        type: integer
+      bitrate-unit:
+        description: data rate unit for uplink and downlink
+        type: string
+      dest-port-end:
+        description: port range end
+        type: integer
+      dest-port-start:
+        description: port range start
+        type: integer
+      endpoint:
+        description: Application Desination IP or network
+        type: string
+      priority:
+        description: priority
+        type: integer
+      protocol:
+        description: protocol
+        type: integer
+      rule-name:
+        description: Rule name
+        type: string
+      rule-trigger:
+        type: string
+      traffic-class:
+        $ref: '#/definitions/configmodels.TrafficClassInfo'
+    type: object
+  configmodels.SliceSiteInfo:
+    properties:
+      gNodeBs:
+        items:
+          $ref: '#/definitions/configmodels.SliceSiteInfoGNodeBs'
+        type: array
+      plmn:
+        $ref: '#/definitions/configmodels.SliceSiteInfoPlmn'
+      site-name:
+        description: Unique name per Site.
+        type: string
+      upf:
+        additionalProperties: true
+        description: UPF which belong to this slice
+        type: object
+    type: object
+  configmodels.SliceSiteInfoGNodeBs:
+    properties:
+      name:
+        type: string
+      tac:
+        description: unique tac per gNB. This should match gNB configuration.
+        type: integer
+    type: object
+  configmodels.SliceSiteInfoPlmn:
+    properties:
+      mcc:
+        type: string
+      mnc:
+        type: string
+    type: object
+  configmodels.SliceSliceId:
+    properties:
+      sd:
+        description: Slice differntiator.
+        type: string
+      sst:
+        description: Slice Service Type
+        type: string
+    type: object
+  configmodels.SubsListIE:
+    properties:
+      plmnID:
+        type: string
+      ueId:
+        type: string
+    type: object
+  configmodels.SubsOverrideData:
+    properties:
+      key:
+        type: string
+      opc:
+        type: string
+      plmnID:
+        type: string
+      sequenceNumber:
+        type: string
+    type: object
+  configmodels.TrafficClassInfo:
+    properties:
+      arp:
+        description: Traffic class priority
+        type: integer
+      name:
+        description: Traffic class name
+        type: string
+      pdb:
+        description: Packet Delay Budget
+        type: integer
+      pelr:
+        description: Packet Error Loss Rate
+        type: integer
+      qci:
+        description: QCI/5QI/QFI
+        type: integer
+    type: object
+host: localhost:5000
+info:
+  contact:
+    name: OMEC-webconsole
+    url: https://github.com/omec-project/webconsole
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Webconsole API Documentation
+  version: "1.0"
+paths:
+  /api/subscriber/:
+    get:
+      description: Return the list of subscribers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of subscribers
+          schema:
+            $ref: '#/definitions/configmodels.SubsListIE'
+        "500":
+          description: Error retrieving subscribers
+      tags:
+      - Subscribers
+  /api/subscriber/{imsi}:
+    delete:
+      description: Delete an existing subscriber
+      parameters:
+      - description: IMSI (UE ID)
+        in: path
+        name: imsi
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Subscriber deleted successfully
+        "500":
+          description: Error deleting subscriber
+      tags:
+      - Subscribers
+    get:
+      description: Get subscriber by IMSI (UE ID)
+      parameters:
+      - description: IMSI (UE ID)
+        example: imsi-208930100007487
+        in: path
+        name: imsi
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscriber
+        "404":
+          description: Subscriber not found
+        "500":
+          description: Error retrieving subscriber
+      tags:
+      - Subscribers
+    post:
+      description: Create subscriber by IMSI (UE ID)
+      parameters:
+      - description: IMSI (UE ID)
+        in: path
+        name: imsi
+        required: true
+        type: string
+      - description: ' '
+        in: body
+        name: content
+        required: true
+        schema:
+          $ref: '#/definitions/configmodels.SubsOverrideData'
+      responses:
+        "201":
+          description: Subscriber created
+        "400":
+          description: Invalid subscriber content
+        "500":
+          description: Error creating subscriber
+      tags:
+      - Subscribers
+  /config/v1/device-group/:
+    get:
+      description: Return the list of device groups
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of device group names
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Error retrieving device groups
+      tags:
+      - Device Groups
+  /config/v1/device-group/{deviceGroupName}:
+    delete:
+      description: Delete an existing device group
+      parameters:
+      - description: ' '
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Device group deleted successfully
+        "400":
+          description: Invalid device group name provided
+        "500":
+          description: Error deleting device group
+      tags:
+      - Device Groups
+    get:
+      description: Return the device group
+      parameters:
+      - description: ' '
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Device group
+          schema:
+            $ref: '#/definitions/configmodels.DeviceGroups'
+        "404":
+          description: Device group not found
+        "500":
+          description: Error retrieving device group
+      tags:
+      - Device Groups
+    post:
+      description: Create a new device group
+      parameters:
+      - description: ' '
+        in: path
+        name: deviceGroupName
+        required: true
+        type: string
+      - description: ' '
+        in: body
+        name: content
+        required: true
+        schema:
+          $ref: '#/definitions/configmodels.DeviceGroups'
+      responses:
+        "200":
+          description: Device group created
+        "400":
+          description: Invalid device group content
+        "500":
+          description: Error creating device group
+      tags:
+      - Device Groups
+  /config/v1/network-slice/:
+    get:
+      description: Return the list of network slices
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of network slice names
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Error retrieving network slices
+      tags:
+      - Network Slices
+  /config/v1/network-slice/{sliceName}:
+    delete:
+      description: Delete an existing network slice
+      parameters:
+      - description: ' '
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Network slice deleted successfully
+        "400":
+          description: Invalid network slice name provided
+        "500":
+          description: Error deleting network slice
+      tags:
+      - Network Slices
+    get:
+      description: Return the network slice
+      parameters:
+      - description: ' '
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Network slice
+          schema:
+            $ref: '#/definitions/configmodels.Slice'
+        "404":
+          description: Network slices not found
+        "500":
+          description: Error retrieving network slice
+      tags:
+      - Network Slices
+    post:
+      description: Create a new network slice
+      parameters:
+      - description: ' '
+        in: path
+        name: sliceName
+        required: true
+        type: string
+      - description: ' '
+        in: body
+        name: content
+        required: true
+        schema:
+          $ref: '#/definitions/configmodels.Slice'
+      responses:
+        "200":
+          description: Network slice created
+        "400":
+          description: Invalid network slice content
+        "500":
+          description: Error creating network slice
+      tags:
+      - Network Slices
+swagger: "2.0"
