@@ -1,0 +1,331 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Canonical Ltd.
+
+package authentication
+
+import (
+    //"errors"
+    //"fmt"
+    "encoding/json"
+    "crypto/rand"
+    //"strings"
+    "net/http"
+	mrand "math/rand"
+    "math/big"
+    "github.com/gin-gonic/gin"
+    //"github.com/omec-project/util/httpwrapper"
+    "github.com/omec-project/webconsole/backend/logger"
+    "github.com/omec-project/webconsole/configmodels"
+    "github.com/omec-project/webconsole/dbadapter"
+    "go.mongodb.org/mongo-driver/bson"
+    "regexp"
+)
+
+const userAccountDataColl = "webconsoleData.snapshots.userAccountData"
+
+
+func mapToByte(data map[string]interface{}) (ret []byte) {
+	ret, _ = json.Marshal(data)
+	return
+}
+func toBsonM(data interface{}) (ret bson.M) {
+	tmp, err := json.Marshal(data)
+	if err != nil {
+		logger.DbLog.Errorln("Could not marshall data")
+		return nil
+	}
+	err = json.Unmarshal(tmp, &ret)
+	if err != nil {
+		logger.DbLog.Errorln("Could not unmarshall data")
+		return nil
+	}
+	return ret
+}
+
+func GetUserAccounts(c *gin.Context) {
+    logger.WebUILog.Infoln("get all user accounts")
+    rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
+    if errGetMany != nil {
+        logger.DbLog.Errorln(errGetMany)
+        c.String(http.StatusInternalServerError, "error retrieving user accounts from DB")
+        return
+    }
+    var users []*configmodels.User
+    for _, rawUser := range rawUsers {
+        var userData configmodels.User
+        err := json.Unmarshal(mapToByte(rawUser), &userData)
+        if err != nil {
+            logger.DbLog.Errorf("Could not unmarshall user %v", rawUser)
+        }
+        userData.Password = ""
+        users = append(users, &userData)
+    }
+    c.JSON(http.StatusOK, users)
+}
+
+func GetUserAccount(c *gin.Context) {
+    logger.WebUILog.Infoln("get user account")
+
+    var err error
+    id := c.Param("id")
+    /*
+    if id == "me" {
+        claims, headerErr := getClaimsFromAuthorizationHeader(c.Header.Get("Authorization"), env.JWTSecret)
+        if headerErr != nil {
+            logger.DbLog.Errorln(err)
+            c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+            return
+        }
+        filter := bson.M{"username": claims.Username}
+    } else {
+        filter := bson.M{"id": id}
+    }*/
+    filter := bson.M{"username": id}
+    rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        //if errors.Is(err, certdb.ErrIdNotFound) {
+        //    c.String(http.StatusNotFound, "error: user ID not found")
+        //    return
+        //}
+        c.String(http.StatusInternalServerError, "error retrieving user account from DB")
+        return
+    }
+    var userAccount configmodels.User
+    err = json.Unmarshal(mapToByte(rawUser), &userAccount)
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        c.String(http.StatusInternalServerError, "error unmarshalling user account")
+        return
+    }
+    userAccount.Password = ""
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        c.String(http.StatusInternalServerError,"error marshalling user account")
+        return
+    }
+    c.JSON(http.StatusOK, userAccount)
+}
+
+func PostUserAccount(c *gin.Context) {
+
+    var user configmodels.User
+    err := c.ShouldBindJSON(&user)
+
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        c.String(http.StatusBadRequest, "invalid data provided")
+    }
+    if user.Username == "" {
+        errorMessage := "username is required"
+        logger.DbLog.Errorln(errorMessage)
+        c.String(http.StatusBadRequest, errorMessage)
+        return
+    }
+    var shouldGeneratePassword = user.Password == ""
+    if shouldGeneratePassword {
+        generatedPassword, err := generatePassword()
+        if err != nil {
+            errorMessage := "failed to generate password"
+            logger.DbLog.Errorln(errorMessage)
+            c.String(http.StatusInternalServerError, errorMessage)
+            return
+        }
+        user.Password = generatedPassword
+    }
+ 
+    if !validatePassword(user.Password) {
+        errorMessage := "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
+        logger.DbLog.Errorln("invalid password provided")
+        c.String(http.StatusBadRequest, errorMessage)
+        return
+    }
+
+    rawUsers, err := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
+    if err != nil {
+        logger.DbLog.Errorln(err.Error())
+        c.String(http.StatusInternalServerError, "failed to retrieve users")
+        return
+    }
+    
+    user.Permissions = 0
+    if len(rawUsers) == 0 {
+        user.Permissions = 1 //if this is the first user it will be admin
+    }
+
+    userBsonA := toBsonM(user)
+    filter := bson.M{"username": user.Username}
+    res, err := dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
+    logger.DbLog.Errorln(res)
+    if err != nil {
+        //if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+        //    logErrorAndWriteResponse("user with given username already exists", http.StatusBadRequest, w)
+        //    return
+        //}
+        logger.DbLog.Errorln(err.Error())
+        c.String(http.StatusInternalServerError, "failed to create user")
+        return
+    }
+    if shouldGeneratePassword {
+        c.JSON(http.StatusCreated, gin.H{"id": user.ID, "password": user.Password})
+        return
+    }
+    c.JSON(http.StatusCreated, gin.H{"id": user.ID})
+}
+
+func DeleteUserAccount(c *gin.Context) {
+    /*id := c.Param("id")
+    filter := bson.M{"id": id}
+    userAccount, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        if errors.Is(err, certdb.ErrIdNotFound) {
+            c.JSON(http.StatusNotFound, gin.H{"error": headerErr.Error()})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": headerErr.Error()})
+        return
+    }
+    if userAccount.Permissions == 1 {
+        logger.DbLog.Errorln(err)
+        c.JSON(http.StatusBadRequest, gin.H{"error": "deleting an Admin account is not allowed."})
+        return
+    }
+    insertId, err := env.DB.DeleteUser(id)
+    if err != nil {
+        logger.DbLog.Errorln(err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": headerErr.Error()})
+    }
+
+    w.WriteHeader(http.StatusAccepted)
+    c.JSON(http.StatusOK, gin.H{})
+    */
+    //if _, err := w.Write([]byte(strconv.FormatInt(insertId, 10))); err != nil {
+    //    logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
+    //}
+}
+
+func ChangeUserAccountPasssword(c *gin.Context) {
+
+    /*id := c.Param("id")
+    if id == "me" {
+        claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
+        if err != nil {
+            logger.DbLog.Errorln(err)
+            c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+        }
+        userAccount, err := env.DB.RetrieveUserByUsername(claims.Username)
+        if err != nil {
+            logger.DbLog.Errorln(err)
+            c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+        }
+        id = strconv.Itoa(userAccount.ID)
+    }
+    var userAccount configmodels.UserAccount 
+    if err := json.NewDecoder(r.Body).Decode(&userAccount); err != nil {
+        logger.DbLog.Errorln(err)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+        logErrorAndWriteResponse("Invalid JSON format", http.StatusBadRequest, w)
+        return
+    }
+    if userAccount.Password == "" {
+        logErrorAndWriteResponse("Password is required", http.StatusBadRequest, w)
+        return
+    }
+    if !validatePassword(userAccount.Password) {
+        logErrorAndWriteResponse(
+            "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
+            http.StatusBadRequest,
+            w,
+        )
+        return
+    }
+    ret, err := env.DB.UpdateUser(id, userAccount.Password)
+    if err != nil {
+        if errors.Is(err, certdb.ErrIdNotFound) {
+            logErrorAndWriteResponse(err.Error(), http.StatusNotFound, w)
+            return
+        }
+        logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
+    if _, err := w.Write([]byte(strconv.FormatInt(ret, 10))); err != nil {
+        logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
+    }
+    
+    if err := handleChangeUserAccountPassword(c); err == nil {
+        c.JSON(http.StatusOK, gin.H{})
+    } else {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+    }*/
+}
+
+func Login(c *gin.Context) {
+    logger.WebUILog.Infoln("log in")
+
+    c.JSON(http.StatusOK, nil)
+}
+
+// Generates a random 16 chars long password that contains uppercase and lowercase characters and numbers or symbols.
+func generatePassword() (string, error) {
+	const (
+		uppercaseSet         = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		lowercaseSet         = "abcdefghijklmnopqrstuvwxyz"
+		numbersAndSymbolsSet = "0123456789*?@"
+		allCharsSet          = uppercaseSet + lowercaseSet + numbersAndSymbolsSet
+	)
+	uppercase, err := getRandomChars(uppercaseSet, 2)
+	if err != nil {
+		return "", err
+	}
+	lowercase, err := getRandomChars(lowercaseSet, 2)
+	if err != nil {
+		return "", err
+	}
+	numbersOrSymbols, err := getRandomChars(numbersAndSymbolsSet, 2)
+	if err != nil {
+		return "", err
+	}
+	allChars, err := getRandomChars(allCharsSet, 10)
+	if err != nil {
+		return "", err
+	}
+	res := []rune(uppercase + lowercase + numbersOrSymbols + allChars)
+	mrand.Shuffle(len(res), func(i, j int) {
+		res[i], res[j] = res[j], res[i]
+	})
+	return string(res), nil
+}
+
+func getRandomChars(charset string, length int) (string, error) {
+	result := make([]byte, length)
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = charset[n.Int64()]
+	}
+	return string(result), nil
+}
+
+func validatePassword(password string) bool {
+	if len(password) < 8 {
+		return false
+	}
+	hasCapital := regexp.MustCompile(`[A-Z]`).MatchString(password)
+	if !hasCapital {
+		return false
+	}
+	hasLower := regexp.MustCompile(`[a-z]`).MatchString(password)
+	if !hasLower {
+		return false
+	}
+	hasNumberOrSymbol := regexp.MustCompile(`[0-9!@#$%^&*()_+\-=\[\]{};':"|,.<>?~]`).MatchString(password)
+
+	return hasNumberOrSymbol
+}
+
+
+

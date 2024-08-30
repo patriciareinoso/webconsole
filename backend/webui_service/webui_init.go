@@ -26,6 +26,7 @@ import (
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/metrics"
 	"github.com/omec-project/webconsole/backend/webui_context"
+	"github.com/omec-project/webconsole/backend/authentication"
 	"github.com/omec-project/webconsole/configapi"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
@@ -171,6 +172,9 @@ func (webui *WEBUI) Start() {
 	AddUiService(subconfig_router)
 	configapi.AddServiceSub(subconfig_router)
 	configapi.AddService(subconfig_router)
+	if factory.WebUIConfig.Configuration.EnableAuthentication {
+		authentication.AddService(subconfig_router)
+	}
 
 	go metrics.InitMetrics()
 
