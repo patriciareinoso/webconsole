@@ -77,8 +77,8 @@
 	{
 		"DeleteUserAccount",
 		http.MethodDelete,
-		"/account",
-		PostUserAccount,
+		"/account/:id",
+		DeleteUserAccount,
 	},
 	{
 		"ChangeUserAccountPasssword",

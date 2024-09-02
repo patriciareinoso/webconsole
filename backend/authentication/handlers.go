@@ -55,7 +55,8 @@ func GetUserAccounts(c *gin.Context) {
         var userData configmodels.User
         err := json.Unmarshal(mapToByte(rawUser), &userData)
         if err != nil {
-            logger.DbLog.Errorf("Could not unmarshall user %v", rawUser)
+            logger.AuthLog.Errorf("Could not unmarshall user")
+            continue
         }
         userData.Password = ""
         users = append(users, &userData)
@@ -94,31 +95,31 @@ func GetUserAccount(c *gin.Context) {
     var userAccount configmodels.User
     err = json.Unmarshal(mapToByte(rawUser), &userAccount)
     if err != nil {
-        logger.DbLog.Errorln(err)
+        logger.AuthLog.Errorln(err)
         c.String(http.StatusInternalServerError, "error unmarshalling user account")
         return
     }
     userAccount.Password = ""
-    if err != nil {
-        logger.DbLog.Errorln(err)
-        c.String(http.StatusInternalServerError,"error marshalling user account")
-        return
-    }
+    //if err != nil {
+    //    logger.AuthLog.Errorln(err)
+    //    c.String(http.StatusInternalServerError,"error marshalling user account")
+    //    return
+    //}
     c.JSON(http.StatusOK, userAccount)
 }
 
 func PostUserAccount(c *gin.Context) {
-
+    logger.WebUILog.Infoln("create user account")
     var user configmodels.User
     err := c.ShouldBindJSON(&user)
 
     if err != nil {
-        logger.DbLog.Errorln(err)
+        logger.AuthLog.Errorln(err)
         c.String(http.StatusBadRequest, "invalid data provided")
     }
     if user.Username == "" {
         errorMessage := "username is required"
-        logger.DbLog.Errorln(errorMessage)
+        logger.AuthLog.Errorln(errorMessage)
         c.String(http.StatusBadRequest, errorMessage)
         return
     }
@@ -127,7 +128,7 @@ func PostUserAccount(c *gin.Context) {
         generatedPassword, err := generatePassword()
         if err != nil {
             errorMessage := "failed to generate password"
-            logger.DbLog.Errorln(errorMessage)
+            logger.AuthLog.Errorln(errorMessage)
             c.String(http.StatusInternalServerError, errorMessage)
             return
         }
@@ -136,7 +137,7 @@ func PostUserAccount(c *gin.Context) {
  
     if !validatePassword(user.Password) {
         errorMessage := "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
-        logger.DbLog.Errorln("invalid password provided")
+        logger.AuthLog.Errorln("invalid password provided")
         c.String(http.StatusBadRequest, errorMessage)
         return
     }
@@ -155,8 +156,7 @@ func PostUserAccount(c *gin.Context) {
 
     userBsonA := toBsonM(user)
     filter := bson.M{"username": user.Username}
-    res, err := dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
-    logger.DbLog.Errorln(res)
+    _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
     if err != nil {
         //if strings.Contains(err.Error(), "UNIQUE constraint failed") {
         //    logErrorAndWriteResponse("user with given username already exists", http.StatusBadRequest, w)
@@ -174,91 +174,88 @@ func PostUserAccount(c *gin.Context) {
 }
 
 func DeleteUserAccount(c *gin.Context) {
-    /*id := c.Param("id")
-    filter := bson.M{"id": id}
-    userAccount, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+    logger.WebUILog.Infoln("delete user account")
+
+    id := c.Param("id")
+    filter := bson.M{"username": id}
+    rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
     if err != nil {
         logger.DbLog.Errorln(err)
-        if errors.Is(err, certdb.ErrIdNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": headerErr.Error()})
-            return
-        }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": headerErr.Error()})
+        //if errors.Is(err, certdb.ErrIdNotFound) {
+        //    c.JSON(http.StatusNotFound, gin.H{"error": headerErr.Error()})
+        //    return
+        //}
+        c.String(http.StatusInternalServerError, "error retrieving user account")
+        return
+    }
+    var userAccount configmodels.User
+    err = json.Unmarshal(mapToByte(rawUser), &userAccount)
+    if err != nil {
+        logger.AuthLog.Errorln(err)
+        c.String(http.StatusInternalServerError, "error unmarshalling user account")
         return
     }
     if userAccount.Permissions == 1 {
-        logger.DbLog.Errorln(err)
-        c.JSON(http.StatusBadRequest, gin.H{"error": "deleting an Admin account is not allowed."})
+        errMessage := "deleting an Admin account is not allowed."
+        logger.AuthLog.Errorln(errMessage)
+        c.String(http.StatusBadRequest, errMessage)
         return
     }
-    insertId, err := env.DB.DeleteUser(id)
-    if err != nil {
-        logger.DbLog.Errorln(err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": headerErr.Error()})
-    }
-
-    w.WriteHeader(http.StatusAccepted)
+	errDelOne := dbadapter.CommonDBClient.RestfulAPIDeleteOne(userAccountDataColl, filter)
+	if errDelOne != nil {
+		logger.DbLog.Errorln(errDelOne)
+        c.String(http.StatusInternalServerError,  "error deleting user account")
+        return
+	}
     c.JSON(http.StatusOK, gin.H{})
-    */
-    //if _, err := w.Write([]byte(strconv.FormatInt(insertId, 10))); err != nil {
-    //    logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
-    //}
 }
 
 func ChangeUserAccountPasssword(c *gin.Context) {
-
-    /*id := c.Param("id")
-    if id == "me" {
-        claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
-        if err != nil {
-            logger.DbLog.Errorln(err)
-            c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-        }
-        userAccount, err := env.DB.RetrieveUserByUsername(claims.Username)
-        if err != nil {
-            logger.DbLog.Errorln(err)
-            c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-        }
-        id = strconv.Itoa(userAccount.ID)
-    }
-    var userAccount configmodels.UserAccount 
-    if err := json.NewDecoder(r.Body).Decode(&userAccount); err != nil {
-        logger.DbLog.Errorln(err)
-        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-        logErrorAndWriteResponse("Invalid JSON format", http.StatusBadRequest, w)
+    logger.WebUILog.Infoln("delete user account")
+    id := c.Param("id")
+    //if id == "me" {
+    //    claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
+    //    if err != nil {
+    //        logger.DbLog.Errorln(err)
+    //        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+    //    }
+    //    userAccount, err := env.DB.RetrieveUserByUsername(claims.Username)
+    //    if err != nil {
+    //        logger.DbLog.Errorln(err)
+    //        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
+    //    }
+    //    id = strconv.Itoa(userAccount.ID)
+    //}
+    var userAccount configmodels.User
+    err := c.ShouldBindJSON(&userAccount)
+    if err != nil {
+        logger.AuthLog.Errorln(err)
+        c.String(http.StatusBadRequest, "invalid data provided")
         return
     }
     if userAccount.Password == "" {
-        logErrorAndWriteResponse("Password is required", http.StatusBadRequest, w)
+        c.String(http.StatusBadRequest, "password is required")
         return
     }
     if !validatePassword(userAccount.Password) {
-        logErrorAndWriteResponse(
-            "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
-            http.StatusBadRequest,
-            w,
-        )
+        errorMessage:= "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
+        c.String(http.StatusBadRequest, errorMessage)
         return
     }
-    ret, err := env.DB.UpdateUser(id, userAccount.Password)
+
+    userBsonA := toBsonM(userAccount)
+    filter := bson.M{"username": id}
+    _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
     if err != nil {
-        if errors.Is(err, certdb.ErrIdNotFound) {
-            logErrorAndWriteResponse(err.Error(), http.StatusNotFound, w)
-            return
-        }
-        logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
+        //if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+        //    logErrorAndWriteResponse("user with given username already exists", http.StatusBadRequest, w)
+        //    return
+        //}
+        logger.DbLog.Errorln(err.Error())
+        c.String(http.StatusInternalServerError, "failed to update user")
         return
     }
-    w.WriteHeader(http.StatusOK)
-    if _, err := w.Write([]byte(strconv.FormatInt(ret, 10))); err != nil {
-        logErrorAndWriteResponse(err.Error(), http.StatusInternalServerError, w)
-    }
-    
-    if err := handleChangeUserAccountPassword(c); err == nil {
-        c.JSON(http.StatusOK, gin.H{})
-    } else {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-    }*/
+    c.JSON(http.StatusOK, gin.H{})
 }
 
 func Login(c *gin.Context) {
