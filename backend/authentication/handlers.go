@@ -250,10 +250,6 @@ func ChangeUserAccountPasssword(c *gin.Context) {
     filter := bson.M{"username": id}
     _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
     if err != nil {
-        //if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-        //    logErrorAndWriteResponse("user with given username already exists", http.StatusBadRequest, w)
-        //    return
-        //}
         logger.DbLog.Errorln(err.Error())
         c.String(http.StatusInternalServerError, "failed to update user")
         return

@@ -596,3 +596,130 @@ func TestDeleteUserAccount_DeleteRegularUser(t *testing.T) {
 	}
 }
 
+func TestChangePassword_InvalidInput(t *testing.T) {
+
+    //dbadapter.CommonDBClient = &MockMongoClientRegularUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    adminUser := `{"username": "adminadmin", "password": 1234}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusBadRequest != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    }
+    expectedMessage := "invalid data provided"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestChangePassword_NoDataInput(t *testing.T) {
+
+    //dbadapter.CommonDBClient = &MockMongoClientRegularUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    //adminUser := `{"username": "adminadmin", "password": 1234}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", nil) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusBadRequest != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    }
+    expectedMessage := "invalid data provided"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestChangePassword_NoPassword(t *testing.T) {
+
+    //dbadapter.CommonDBClient = &MockMongoClientRegularUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    adminUser := `{"username": "adminadmin"}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusBadRequest != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    }
+    expectedMessage := "password is required"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestChangePassword_InvalidPassword(t *testing.T) {
+
+    //dbadapter.CommonDBClient = &MockMongoClientRegularUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    adminUser := `{"username": "adminadmin", "password": "1234"}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusBadRequest != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    }
+    expectedMessage := "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestChangePassword_DBError(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientDBError{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    adminUser := `{"username": "adminadmin", "password": "Admin1234"}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusInternalServerError != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusInternalServerError, w.Code)
+    }
+    expectedMessage := "failed to update user"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestChangePassword_Success(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientManyUsers{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+    adminUser := `{"username": "adminadmin", "password": "Admin1234"}`
+	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	ChangeUserAccountPasssword(c)
+
+    if http.StatusOK != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusOK, w.Code)
+    }
+    expectedMessage := "{}"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+
