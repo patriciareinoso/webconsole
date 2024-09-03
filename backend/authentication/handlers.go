@@ -214,7 +214,7 @@ func DeleteUserAccount(c *gin.Context) {
 }
 
 func ChangeUserAccountPasssword(c *gin.Context) {
-    logger.WebUILog.Infoln("delete user account")
+    logger.WebUILog.Infoln("change user password")
     id := c.Param("id")
     //if id == "me" {
     //    claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
