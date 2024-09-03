@@ -184,11 +184,11 @@ func DeleteUserAccount(c *gin.Context) {
     rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
     if err != nil {
         logger.DbLog.Errorln(err)
-        //if errors.Is(err, certdb.ErrIdNotFound) {
-        //    c.JSON(http.StatusNotFound, gin.H{"error": headerErr.Error()})
-        //    return
-        //}
         c.String(http.StatusInternalServerError, "error retrieving user account")
+        return
+    }
+    if len(rawUser) == 0 {
+        c.String(http.StatusNotFound, "error: user ID not found")
         return
     }
     var userAccount configmodels.User

@@ -42,6 +42,14 @@ type MockMongoClientOneUserNoUser struct {
     dbadapter.DBInterface
 }
 
+type MockMongoClientAdminUser struct {
+    dbadapter.DBInterface
+}
+
+type MockMongoClientRegularUser struct {
+    dbadapter.DBInterface
+}
+
 
 func (m *MockMongoClientNoUsers) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
     var results []map[string]interface{}
@@ -58,6 +66,25 @@ func (m *MockMongoClientManyUsers) RestfulAPIGetMany(coll string, filter bson.M)
         {"id": 1, "username": "janedoe", "password": "hidden", "permissions": 1},
     }
     return rawUsers, nil
+}
+
+func (m *MockMongoClientRegularUser) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
+	rawUser := map[string]interface{}{
+        "id": 5, "username": "janedoe", "password": "hidden", "permissions": 0,
+    }
+	return rawUser, nil
+}
+
+func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter bson.M) error{
+	return nil
+}
+
+
+func (m *MockMongoClientAdminUser) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
+	rawUser := map[string]interface{}{
+        "id": 5, "username": "janedoe", "password": "hidden", "permissions": 1,
+    }
+	return rawUser, nil
 }
 
 func (m *MockMongoClientManyUsers) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
@@ -469,25 +496,103 @@ func TestPostUserAccount_SecondUserIsCreated(t *testing.T) {
 	}
 }
 
-/*
-func TestPostUserAccount_NoPasswordProvided(t *testing.T) {
-    generatePassword = mockGeneratePassword
-	validatePassword = mockValidatePassword
+func TestDeleteUserAccount_DBError(t *testing.T) {
 
+    dbadapter.CommonDBClient = &MockMongoClientDBError{}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-    adminUser := `{"username": "testadmin"}`
     
-	c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+	//c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
 
-	PostUserAccount(c)
+	DeleteUserAccount(c)
 
-    if http.StatusBadRequest != w.Code {
-        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    if http.StatusInternalServerError != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusInternalServerError, w.Code)
     }
-    expectedMessage := "invalid data provided"
+    expectedMessage := "error retrieving user account"
 	if  w.Body.String() != expectedMessage{
 		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
 	}
 }
-*/
+
+func TestDeleteUserAccount_UserNotFound(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientOneUserNoUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+	//c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	DeleteUserAccount(c)
+
+    if http.StatusNotFound != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusNotFound, w.Code)
+    }
+    expectedMessage := "error: user ID not found"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestDeleteUserAccount_InvalidUser(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientInvalidUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+	//c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	DeleteUserAccount(c)
+
+    if http.StatusInternalServerError != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusInternalServerError, w.Code)
+    }
+    expectedMessage := "error unmarshalling user account"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestDeleteUserAccount_DeleteAdmin(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientAdminUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+	//c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	DeleteUserAccount(c)
+
+    if http.StatusBadRequest != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusBadRequest, w.Code)
+    }
+    expectedMessage := "deleting an Admin account is not allowed."
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
+func TestDeleteUserAccount_DeleteRegularUser(t *testing.T) {
+
+    dbadapter.CommonDBClient = &MockMongoClientRegularUser{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+    
+	//c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(adminUser)) // Invalid JSON
+    c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+
+	DeleteUserAccount(c)
+
+    if http.StatusOK != w.Code {
+        t.Errorf("Expected %v, got %v", http.StatusOK, w.Code)
+    }
+    expectedMessage := "{}"
+	if  w.Body.String() != expectedMessage{
+		t.Errorf("Expected %v, got %v", expectedMessage, w.Body.String())
+	}
+}
+
