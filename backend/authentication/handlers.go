@@ -23,6 +23,10 @@ import (
 
 const userAccountDataColl = "webconsoleData.snapshots.userAccountData"
 
+var (
+    generatePasswordFunc = generatePassword
+    validatePasswordFunc = validatePassword
+)
 
 func mapToByte(data map[string]interface{}) (ret []byte) {
 	ret, _ = json.Marshal(data)
@@ -83,15 +87,16 @@ func GetUserAccount(c *gin.Context) {
     }*/
     filter := bson.M{"username": id}
     rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+    logger.DbLog.Errorln(rawUser)
     if err != nil {
         logger.DbLog.Errorln(err)
-        //if errors.Is(err, certdb.ErrIdNotFound) {
-        //    c.String(http.StatusNotFound, "error: user ID not found")
-        //    return
-        //}
         c.String(http.StatusInternalServerError, "error retrieving user account from DB")
         return
     }
+    if len(rawUser) == 0 {
+        c.String(http.StatusNotFound, "error: user ID not found")
+        return
+    } 
     var userAccount configmodels.User
     err = json.Unmarshal(mapToByte(rawUser), &userAccount)
     if err != nil {
@@ -100,11 +105,6 @@ func GetUserAccount(c *gin.Context) {
         return
     }
     userAccount.Password = ""
-    //if err != nil {
-    //    logger.AuthLog.Errorln(err)
-    //    c.String(http.StatusInternalServerError,"error marshalling user account")
-    //    return
-    //}
     c.JSON(http.StatusOK, userAccount)
 }
 
@@ -116,6 +116,7 @@ func PostUserAccount(c *gin.Context) {
     if err != nil {
         logger.AuthLog.Errorln(err)
         c.String(http.StatusBadRequest, "invalid data provided")
+        return
     }
     if user.Username == "" {
         errorMessage := "username is required"
@@ -125,7 +126,7 @@ func PostUserAccount(c *gin.Context) {
     }
     var shouldGeneratePassword = user.Password == ""
     if shouldGeneratePassword {
-        generatedPassword, err := generatePassword()
+        generatedPassword, err := generatePasswordFunc()
         if err != nil {
             errorMessage := "failed to generate password"
             logger.AuthLog.Errorln(errorMessage)
@@ -135,7 +136,7 @@ func PostUserAccount(c *gin.Context) {
         user.Password = generatedPassword
     }
  
-    if !validatePassword(user.Password) {
+    if !validatePasswordFunc(user.Password) {
         errorMessage := "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
         logger.AuthLog.Errorln("invalid password provided")
         c.String(http.StatusBadRequest, errorMessage)
@@ -148,9 +149,11 @@ func PostUserAccount(c *gin.Context) {
         c.String(http.StatusInternalServerError, "failed to retrieve users")
         return
     }
+    logger.DbLog.Errorln(rawUsers)
     
     user.Permissions = 0
     if len(rawUsers) == 0 {
+        logger.DbLog.Errorln(len(rawUsers))
         user.Permissions = 1 //if this is the first user it will be admin
     }
 
@@ -237,7 +240,7 @@ func ChangeUserAccountPasssword(c *gin.Context) {
         c.String(http.StatusBadRequest, "password is required")
         return
     }
-    if !validatePassword(userAccount.Password) {
+    if !validatePasswordFunc(userAccount.Password) {
         errorMessage:= "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
         c.String(http.StatusBadRequest, errorMessage)
         return
