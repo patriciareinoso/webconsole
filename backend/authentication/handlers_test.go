@@ -62,7 +62,6 @@ func (m *MockMongoClientDBError)RestfulAPIPost(collName string, filter bson.M, p
 
 func (m *MockMongoClientInvalidUser) RestfulAPIGetOne(collName string, filter bson.M) (map[string]interface{}, error){
     rawUser := map[string]interface{}{
-        "id": 0, 
         "username": "johndoe", 
         "password": 1234, 
         "permissions": 0,
@@ -71,23 +70,23 @@ func (m *MockMongoClientInvalidUser) RestfulAPIGetOne(collName string, filter bs
 }
 func (m *MockMongoClientInvalidUser) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
     rawUsers := []map[string]interface{}{
-        {"id": 0, "username": "johndoe", "password": 1234, "permissions": 0},
-        {"id": 1, "username": "janedoe", "password": "hidden", "permissions": 1},
+        {"username": "johndoe", "password": 1234, "permissions": 0},
+        {"username": "janedoe", "password": "hidden", "permissions": 1},
     }
     return rawUsers, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-        "id": 5, "username": "janedoe", "password": "hidden", "permissions": 1,
+        "username": "janedoe", "password": "hidden", "permissions": 1,
     }
 	return rawUser, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
     rawUsers := []map[string]interface{}{
-        {"id": 0, "username": "johndoe", "password": "secret", "permissions": 0},
-        {"id": 1, "username": "janedoe", "password": "hidden", "permissions": 1},
+        {"username": "johndoe", "password": "secret", "permissions": 0},
+        {"username": "janedoe", "password": "hidden", "permissions": 1},
     }
     return rawUsers, nil
 }
@@ -98,7 +97,7 @@ func (m *MockMongoClientSuccess)RestfulAPIPost(collName string, filter bson.M, p
 
 func (m *MockMongoClientRegularUser) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-        "id": 5, "username": "janedoe", "password": "hidden", "permissions": 0,
+        "username": "janedoe", "password": "hidden", "permissions": 0,
     }
 	return rawUser, nil
 }
@@ -124,7 +123,7 @@ func TestGetUserAccounts(t *testing.T){
             name: "OneInvalidUser", 
             dbAdapter: &MockMongoClientInvalidUser{}, 
             expectedCode: http.StatusOK, 
-            expectedBody: `[{"id":1,"username":"janedoe","permissions":1}]`,
+            expectedBody: `[{"username":"janedoe","permissions":1}]`,
         },
         {
             name: "NoUsers", 
@@ -136,7 +135,7 @@ func TestGetUserAccounts(t *testing.T){
             name: "SuccessManyUsers", 
             dbAdapter: &MockMongoClientSuccess{}, 
             expectedCode: http.StatusOK, 
-            expectedBody: `[{"id":0,"username":"johndoe","permissions":0},{"id":1,"username":"janedoe","permissions":1}]`,
+            expectedBody: `[{"username":"johndoe","permissions":0},{"username":"janedoe","permissions":1}]`,
         },
     }
     for _, tc := range testCases {
@@ -168,7 +167,7 @@ func TestGetUserAccount(t *testing.T){
             name: "Success", 
             dbAdapter: &MockMongoClientSuccess{}, 
             expectedCode: http.StatusOK, 
-            expectedBody: `{"id":5,"username":"janedoe","permissions":1}`,
+            expectedBody: `{"username":"janedoe","permissions":1}`,
         },
         {
             name: "DBError", 
@@ -180,7 +179,7 @@ func TestGetUserAccount(t *testing.T){
             name: "UserNotFound", 
             dbAdapter: &MockMongoClientEmptyDB{}, 
             expectedCode: http.StatusNotFound, 
-            expectedBody: `error: user ID not found`,
+            expectedBody: `error: username not found`,
         },
         {
             name: "InvalidUser", 
@@ -194,6 +193,7 @@ func TestGetUserAccount(t *testing.T){
             dbadapter.CommonDBClient = tc.dbAdapter
             w := httptest.NewRecorder()
             c, _ := gin.CreateTestContext(w)
+            c.Params = gin.Params{{Key: "username", Value: "janedoe"}}       
         
             GetUserAccount(c)
         
@@ -228,31 +228,31 @@ func TestPostUserAccount(t *testing.T){
             name: "CreateSecondUserWithoutPassword", 
             dbAdapter: &MockMongoClientSuccess{}, 
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "adminadmin"}`,
+            inputData: "{}",
             expectedCode: http.StatusCreated, 
-            expectedBody: `{"id":0,"password":"ValidPass123!"}`,
+            expectedBody: `{"password":"ValidPass123!"}`,
         },
         {
             name: "CreateFirstUserWithoutPassword", 
             dbAdapter: &MockMongoClientEmptyDB{},
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "adminadmin"}`,
+            inputData: "{}",
             expectedCode: http.StatusCreated, 
-            expectedBody: `{"id":0,"password":"ValidPass123!"}`,
+            expectedBody: `{"password":"ValidPass123!"}`,
         },
         {
             name: "CreateFirstUserWithPassword", 
             dbAdapter: &MockMongoClientEmptyDB{},
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "adminadmin", "password" : "Admin1234"}`,
+            inputData: `{"password" : "Admin1234"}`,
             expectedCode: http.StatusCreated, 
-            expectedBody: `{"id":0}`,
+            expectedBody: `{}`,
         },
         {
             name: "DBError", 
             dbAdapter: &MockMongoClientDBError{},
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "adminadmin", "password" : "Admin1234"}`,
+            inputData: `{"password" : "Admin1234"}`,
             expectedCode: http.StatusInternalServerError, 
             expectedBody: "failed to retrieve users",
         },
@@ -260,7 +260,7 @@ func TestPostUserAccount(t *testing.T){
             name: "InvalidPassword", 
             dbAdapter: &MockMongoClientSuccess{},
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "adminadmin", "password" : "1234"}`,
+            inputData: `{"password" : "1234"}`,
             expectedCode: http.StatusBadRequest, 
             expectedBody: "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
         },
@@ -268,31 +268,15 @@ func TestPostUserAccount(t *testing.T){
             name: "ErrorGeneratingPassword", 
             dbAdapter: &MockMongoClientSuccess{},
             generatePasswordMock: mockGeneratePasswordFailure,
-            inputData: `{"username": "adminadmin"}`,
+            inputData: "{}",
             expectedCode: http.StatusInternalServerError, 
             expectedBody: "failed to generate password",
-        },
-        {
-            name: "NoUsernameProvided", 
-            dbAdapter: &MockMongoClientSuccess{},
-            generatePasswordMock: mockGeneratePassword,
-            inputData: `{"password": "Admin1234"}`,
-            expectedCode: http.StatusBadRequest, 
-            expectedBody: "username is required",
-        },
-        {
-            name: "EmptyDataProvided", 
-            dbAdapter: &MockMongoClientSuccess{},
-            generatePasswordMock: mockGeneratePassword,
-            inputData: "",
-            expectedCode: http.StatusBadRequest, 
-            expectedBody: "invalid data provided",
         },
         {
             name: "InvalidJsonProvided", 
             dbAdapter: &MockMongoClientSuccess{},
             generatePasswordMock: mockGeneratePassword,
-            inputData: `{"username": "testadmin", "password": 1234}`,
+            inputData: `{"password": 1234}`,
             expectedCode: http.StatusBadRequest, 
             expectedBody: "invalid data provided",
         },
@@ -302,8 +286,9 @@ func TestPostUserAccount(t *testing.T){
             generatePasswordFunc = tc.generatePasswordMock
             dbadapter.CommonDBClient = tc.dbAdapter
             w := httptest.NewRecorder()
-            c, _ := gin.CreateTestContext(w)           
-            c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData)) // Invalid JSON
+            c, _ := gin.CreateTestContext(w)
+            c.Params = gin.Params{{Key: "username", Value: "adminadmin"}}       
+            c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData))
 
             PostUserAccount(c)
 
@@ -321,42 +306,36 @@ func TestDeleteUserAccount(t *testing.T){
     testCases := []struct {
         name         string
         dbAdapter    dbadapter.DBInterface
-        inputData    string
         expectedCode int
         expectedBody string
     }{
         {
             name: "DeleteRegularUser", 
             dbAdapter: &MockMongoClientRegularUser{}, 
-            inputData: "",
             expectedCode: http.StatusOK, 
             expectedBody: "{}",
         },
         {
             name: "DeleteAdminUser", 
             dbAdapter: &MockMongoClientSuccess{}, 
-            inputData: "",
             expectedCode: http.StatusBadRequest, 
             expectedBody: "deleting an Admin account is not allowed.",
         },
         {
             name: "InvalidUser", 
             dbAdapter: &MockMongoClientInvalidUser{}, 
-            inputData: "",
             expectedCode: http.StatusInternalServerError, 
             expectedBody: "error unmarshalling user account",
         },
         {
             name: "UserNotFound", 
             dbAdapter: &MockMongoClientEmptyDB{}, 
-            inputData: "",
             expectedCode: http.StatusNotFound, 
-            expectedBody: "error: user ID not found",
+            expectedBody: "error: username not found",
         },
         {
             name: "DBError", 
             dbAdapter: &MockMongoClientDBError{}, 
-            inputData: "",
             expectedCode: http.StatusInternalServerError, 
             expectedBody: "error retrieving user account",
         },
@@ -366,7 +345,7 @@ func TestDeleteUserAccount(t *testing.T){
             dbadapter.CommonDBClient = tc.dbAdapter
             w := httptest.NewRecorder()
             c, _ := gin.CreateTestContext(w)
-            c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+            c.Params = gin.Params{gin.Param{Key: "username", Value: "janedoe"}}
         
             DeleteUserAccount(c)
         
@@ -391,42 +370,35 @@ func TestChangePassword(t *testing.T){
         {
             name: "Success", 
             dbAdapter: &MockMongoClientSuccess{}, 
-            inputData: `{"username": "adminadmin", "password": "Admin1234"}`,
+            inputData: `{"password": "Admin1234"}`,
             expectedCode: http.StatusOK, 
             expectedBody: "{}",
         },
         {
             name: "DBError", 
             dbAdapter: &MockMongoClientDBError{}, 
-            inputData: `{"username": "adminadmin", "password": "Admin1234"}`,
+            inputData: `{"password": "Admin1234"}`,
             expectedCode: http.StatusInternalServerError, 
             expectedBody: "failed to update user",
         },
         {
             name: "InvalidPassword", 
             dbAdapter: nil, 
-            inputData: `{"username": "adminadmin", "password": "1234"}`,
+            inputData: `{"password": "1234"}`,
             expectedCode: http.StatusBadRequest, 
             expectedBody: "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
         },
         {
             name: "NoPasswordProvided", 
             dbAdapter: nil, 
-            inputData: `{"username": "adminadmin"}`,
+            inputData: `{}`,
             expectedCode: http.StatusBadRequest, 
             expectedBody: "password is required",
         },
         {
-            name: "NoDataInput", 
-            dbAdapter: nil, 
-            inputData: "",
-            expectedCode: http.StatusBadRequest, 
-            expectedBody: "invalid data provided",
-        },
-        {
             name: "InvalidData", 
             dbAdapter: nil, 
-            inputData: `{"username": "adminadmin", "password": 1234}`,
+            inputData: `{"password": 1234}`,
             expectedCode: http.StatusBadRequest, 
             expectedBody: "invalid data provided",
         },
@@ -437,7 +409,7 @@ func TestChangePassword(t *testing.T){
             w := httptest.NewRecorder()
             c, _ := gin.CreateTestContext(w)
             c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData)) // Invalid JSON
-            c.Params = gin.Params{gin.Param{Key: "id", Value: "testuser"}}
+            c.Params = gin.Params{gin.Param{Key: "username", Value: "janedoe"}}
 
             ChangeUserAccountPasssword(c)
 

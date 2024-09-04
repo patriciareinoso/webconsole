@@ -73,7 +73,7 @@ func GetUserAccount(c *gin.Context) {
     logger.WebUILog.Infoln("get user account")
 
     var err error
-    id := c.Param("id")
+    username := c.Param("username")
     /*
     if id == "me" {
         claims, headerErr := getClaimsFromAuthorizationHeader(c.Header.Get("Authorization"), env.JWTSecret)
@@ -86,7 +86,7 @@ func GetUserAccount(c *gin.Context) {
     } else {
         filter := bson.M{"id": id}
     }*/
-    filter := bson.M{"username": id}
+    filter := bson.M{"username": username}
     rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
     logger.DbLog.Errorln(rawUser)
     if err != nil {
@@ -95,7 +95,7 @@ func GetUserAccount(c *gin.Context) {
         return
     }
     if len(rawUser) == 0 {
-        c.String(http.StatusNotFound, "error: user ID not found")
+        c.String(http.StatusNotFound, "error: username not found")
         return
     } 
     var userAccount configmodels.User
@@ -117,12 +117,6 @@ func PostUserAccount(c *gin.Context) {
     if err != nil {
         logger.AuthLog.Errorln(err)
         c.String(http.StatusBadRequest, "invalid data provided")
-        return
-    }
-    if user.Username == "" {
-        errorMessage := "username is required"
-        logger.AuthLog.Errorln(errorMessage)
-        c.String(http.StatusBadRequest, errorMessage)
         return
     }
     var shouldGeneratePassword = user.Password == ""
@@ -158,6 +152,8 @@ func PostUserAccount(c *gin.Context) {
         user.Permissions = 1 //if this is the first user it will be admin
     }
 
+    username := c.Param("username")
+    user.Username = username
     userBsonA := toBsonM(user)
     filter := bson.M{"username": user.Username}
     _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
@@ -171,17 +167,17 @@ func PostUserAccount(c *gin.Context) {
         return
     }
     if shouldGeneratePassword {
-        c.JSON(http.StatusCreated, gin.H{"id": user.ID, "password": user.Password})
+        c.JSON(http.StatusCreated, gin.H{"password": user.Password})
         return
     }
-    c.JSON(http.StatusCreated, gin.H{"id": user.ID})
+    c.JSON(http.StatusCreated, gin.H{})
 }
 
 func DeleteUserAccount(c *gin.Context) {
     logger.WebUILog.Infoln("delete user account")
 
-    id := c.Param("id")
-    filter := bson.M{"username": id}
+    username := c.Param("username")
+    filter := bson.M{"username": username}
     rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
     if err != nil {
         logger.DbLog.Errorln(err)
@@ -189,7 +185,7 @@ func DeleteUserAccount(c *gin.Context) {
         return
     }
     if len(rawUser) == 0 {
-        c.String(http.StatusNotFound, "error: user ID not found")
+        c.String(http.StatusNotFound, "error: username not found")
         return
     }
     var userAccount configmodels.User
@@ -216,7 +212,7 @@ func DeleteUserAccount(c *gin.Context) {
 
 func ChangeUserAccountPasssword(c *gin.Context) {
     logger.WebUILog.Infoln("change user password")
-    id := c.Param("id")
+    username := c.Param("username")
     //if id == "me" {
     //    claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
     //    if err != nil {
@@ -248,7 +244,7 @@ func ChangeUserAccountPasssword(c *gin.Context) {
     }
 
     userBsonA := toBsonM(userAccount)
-    filter := bson.M{"username": id}
+    filter := bson.M{"username": username}
     _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
     if err != nil {
         logger.DbLog.Errorln(err.Error())

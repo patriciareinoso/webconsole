@@ -65,25 +65,25 @@
 	{
 		"GetUserAccount",
 		http.MethodGet,
-		"/account/:id",
+		"/account/:username",
 		GetUserAccount,
 	},
 	{
 		"PostUserAccount",
 		http.MethodPost,
-		"/account/:id",
+		"/account/:username",
 		PostUserAccount,
 	},
 	{
 		"DeleteUserAccount",
 		http.MethodDelete,
-		"/account/:id",
+		"/account/:username",
 		DeleteUserAccount,
 	},
 	{
 		"ChangeUserAccountPasssword",
 		http.MethodPost,
-		"/account/:id/change_password",
+		"/account/:username/change_password",
 		ChangeUserAccountPasssword,
 	},
 	{
