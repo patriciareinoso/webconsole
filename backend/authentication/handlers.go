@@ -55,6 +55,7 @@ func GetUserAccounts(c *gin.Context) {
         return
     }
     var users []*configmodels.User
+    users = make([]*configmodels.User, 0)
     for _, rawUser := range rawUsers {
         var userData configmodels.User
         err := json.Unmarshal(mapToByte(rawUser), &userData)
