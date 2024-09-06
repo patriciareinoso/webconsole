@@ -6,11 +6,11 @@ package authentication
 import (
 	"fmt"
 	//"log"
+	"github.com/omec-project/webconsole/backend/logger"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"github.com/omec-project/webconsole/backend/logger"
 
 	"github.com/golang-jwt/jwt"
 )
@@ -35,7 +35,6 @@ type jwtGocertClaims struct {
 	jwt.StandardClaims
 }
 
-
 // authMiddleware intercepts requests that need authorization to check if the user's token exists and is
 // permitted to use the endpoint
 func authMiddleware(ctx *middlewareContext) middleware {
@@ -55,7 +54,7 @@ func authMiddleware(ctx *middlewareContext) middleware {
 			claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), ctx.jwtSecret)
 			if err != nil {
 				logger.AuthLog.Errorln(err)
-        		//c.String(http.StatusUnauthorized, fmt.Sprintf("auth failed: %s", err.Error()))
+				//c.String(http.StatusUnauthorized, fmt.Sprintf("auth failed: %s", err.Error()))
 				//logErrorAndWriteResponse(fmt.Sprintf("auth failed: %s", err.Error()), http.StatusUnauthorized, w)
 				return
 			}
@@ -127,7 +126,7 @@ func AllowRequest(claims *jwtGocertClaims, method, path string) (bool, error) {
 		if !pr.SelfAuthorizedAllowed {
 			return false, nil
 		}
-		matchedUsername:=matches[1]
+		matchedUsername := matches[1]
 
 		var requestedUsernameMatchesTheClaimant bool
 		if matchedUsername == claims.Username {
