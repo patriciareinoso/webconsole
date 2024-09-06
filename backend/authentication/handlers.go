@@ -168,6 +168,11 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 		user.Username = username
 		password := user.Password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			logger.AuthLog.Errorln(err.Error())
+			c.String(http.StatusInternalServerError, "failed to create user")
+			return
+		}
 		user.Password = string(hashedPassword)
 		userBsonA := toBsonM(user)
 		filter := bson.M{"username": user.Username}
@@ -182,12 +187,14 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			return
 		}
 		if shouldGeneratePassword {
-			c.JSON(http.StatusCreated, gin.H{"password": user.Password})
+			logger.AuthLog.Errorln(password)
+			c.JSON(http.StatusCreated, gin.H{"password": password})
 			return
 		}
 		c.JSON(http.StatusCreated, gin.H{})
 	}
 }
+
 func DeleteUserAccount(jwtSecret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.WebUILog.Infoln("delete user account")
@@ -259,7 +266,16 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 			c.String(http.StatusBadRequest, errorMessage)
 			return
 		}
+
 		userAccount.Username = username
+		password := userAccount.Password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			logger.AuthLog.Errorln(err.Error())
+			c.String(http.StatusInternalServerError, "failed to create user")
+			return
+		}
+		userAccount.Password = string(hashedPassword)
 		userBsonA := toBsonM(userAccount)
 
 		filter := bson.M{"username": username}

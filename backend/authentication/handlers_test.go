@@ -35,6 +35,11 @@ type MockMongoClientRegularUser struct {
 	dbadapter.DBInterface
 }
 
+//func hashPassword(password string) string {
+//	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+//	return string(hashed)
+//}
+
 func (m *MockMongoClientEmptyDB) RestfulAPIGetOne(collName string, filter bson.M) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
 }
@@ -71,22 +76,22 @@ func (m *MockMongoClientInvalidUser) RestfulAPIGetOne(collName string, filter bs
 func (m *MockMongoClientInvalidUser) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
 	rawUsers := []map[string]interface{}{
 		{"username": "johndoe", "password": 1234, "permissions": 0},
-		{"username": "janedoe", "password": "hidden", "permissions": 1},
+		{"username": "janedoe", "password": "password123", "permissions": 1},
 	}
 	return rawUsers, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-		"username": "janedoe", "password": "hidden", "permissions": 1,
+		"username": "janedoe", "password": "password123", "permissions": 1,
 	}
 	return rawUser, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
 	rawUsers := []map[string]interface{}{
-		{"username": "johndoe", "password": "secret", "permissions": 0},
-		{"username": "janedoe", "password": "hidden", "permissions": 1},
+		{"username": "johndoe", "password": "password123", "permissions": 0},
+		{"username": "janedoe", "password": "password123", "permissions": 1},
 	}
 	return rawUsers, nil
 }
@@ -97,7 +102,7 @@ func (m *MockMongoClientSuccess) RestfulAPIPost(collName string, filter bson.M, 
 
 func (m *MockMongoClientRegularUser) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-		"username": "janedoe", "password": "hidden", "permissions": 0,
+		"username": "janedoe", "password": "password123", "permissions": 0,
 	}
 	return rawUser, nil
 }
@@ -107,6 +112,11 @@ func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter
 }
 
 func TestGetUserAccounts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+
 	testCases := []struct {
 		name         string
 		dbAdapter    dbadapter.DBInterface
@@ -141,10 +151,10 @@ func TestGetUserAccounts(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			req, _ := http.NewRequest(http.MethodGet, "/account", nil)
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
 
-			GetUserAccounts(c)
+			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
@@ -157,6 +167,11 @@ func TestGetUserAccounts(t *testing.T) {
 }
 
 func TestGetUserAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+
 	testCases := []struct {
 		name         string
 		dbAdapter    dbadapter.DBInterface
@@ -191,11 +206,10 @@ func TestGetUserAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Params = gin.Params{{Key: "username", Value: "janedoe"}}
 
-			GetUserAccount(c)
+			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
@@ -216,6 +230,11 @@ func mockGeneratePasswordFailure() (string, error) {
 }
 
 func TestPostUserAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
+
 	testCases := []struct {
 		name                 string
 		dbAdapter            dbadapter.DBInterface
@@ -285,12 +304,11 @@ func TestPostUserAccount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			generatePasswordFunc = tc.generatePasswordMock
 			dbadapter.CommonDBClient = tc.dbAdapter
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Params = gin.Params{{Key: "username", Value: "adminadmin"}}
-			c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData))
 
-			PostUserAccount(c)
+			req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(tc.inputData))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
@@ -303,6 +321,11 @@ func TestPostUserAccount(t *testing.T) {
 }
 
 func TestDeleteUserAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+
 	testCases := []struct {
 		name         string
 		dbAdapter    dbadapter.DBInterface
@@ -343,11 +366,9 @@ func TestDeleteUserAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Params = gin.Params{gin.Param{Key: "username", Value: "janedoe"}}
-
-			DeleteUserAccount(c)
+			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
@@ -360,6 +381,11 @@ func TestDeleteUserAccount(t *testing.T) {
 }
 
 func TestChangePassword(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
+
 	testCases := []struct {
 		name         string
 		dbAdapter    dbadapter.DBInterface
@@ -406,12 +432,10 @@ func TestChangePassword(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(tc.inputData))
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData)) // Invalid JSON
-			c.Params = gin.Params{gin.Param{Key: "username", Value: "janedoe"}}
 
-			ChangeUserAccountPasssword(c)
+			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
