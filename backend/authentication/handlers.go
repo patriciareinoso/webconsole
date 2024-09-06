@@ -5,12 +5,13 @@ package authentication
 
 import (
     //"errors"
-    //"fmt"
+    "fmt"
     "encoding/json"
     "crypto/rand"
     //"strings"
     "net/http"
 	mrand "math/rand"
+    "time"
     "math/big"
     "github.com/gin-gonic/gin"
     //"github.com/omec-project/util/httpwrapper"
@@ -19,6 +20,8 @@ import (
     "github.com/omec-project/webconsole/dbadapter"
     "go.mongodb.org/mongo-driver/bson"
     "regexp"
+    "golang.org/x/crypto/bcrypt"
+    "github.com/golang-jwt/jwt"
 )
 
 const userAccountDataColl = "webconsoleData.snapshots.userAccountData"
@@ -46,7 +49,8 @@ func toBsonM(data interface{}) (ret bson.M) {
 	return ret
 }
 
-func GetUserAccounts(c *gin.Context) {
+func GetUserAccounts(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
     logger.WebUILog.Infoln("get all user accounts")
     rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
     if errGetMany != nil {
@@ -68,8 +72,10 @@ func GetUserAccounts(c *gin.Context) {
     }
     c.JSON(http.StatusOK, users)
 }
+}
 
-func GetUserAccount(c *gin.Context) {
+func GetUserAccount(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
     logger.WebUILog.Infoln("get user account")
 
     var err error
@@ -108,8 +114,10 @@ func GetUserAccount(c *gin.Context) {
     userAccount.Password = ""
     c.JSON(http.StatusOK, userAccount)
 }
+}
 
-func PostUserAccount(c *gin.Context) {
+func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
     logger.WebUILog.Infoln("create user account")
     var user configmodels.User
     err := c.ShouldBindJSON(&user)
@@ -154,6 +162,9 @@ func PostUserAccount(c *gin.Context) {
 
     username := c.Param("username")
     user.Username = username
+    password := user.Password
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    user.Password = string(hashedPassword)
     userBsonA := toBsonM(user)
     filter := bson.M{"username": user.Username}
     _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
@@ -172,8 +183,9 @@ func PostUserAccount(c *gin.Context) {
     }
     c.JSON(http.StatusCreated, gin.H{})
 }
-
-func DeleteUserAccount(c *gin.Context) {
+} 
+func DeleteUserAccount(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
     logger.WebUILog.Infoln("delete user account")
 
     username := c.Param("username")
@@ -209,8 +221,9 @@ func DeleteUserAccount(c *gin.Context) {
 	}
     c.JSON(http.StatusOK, gin.H{})
 }
-
-func ChangeUserAccountPasssword(c *gin.Context) {
+}
+func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
     logger.WebUILog.Infoln("change user password")
     username := c.Param("username")
     //if id == "me" {
@@ -242,8 +255,9 @@ func ChangeUserAccountPasssword(c *gin.Context) {
         c.String(http.StatusBadRequest, errorMessage)
         return
     }
-
+    userAccount.Username = username
     userBsonA := toBsonM(userAccount)
+
     filter := bson.M{"username": username}
     _, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
     if err != nil {
@@ -253,11 +267,59 @@ func ChangeUserAccountPasssword(c *gin.Context) {
     }
     c.JSON(http.StatusOK, gin.H{})
 }
+}
+func Login(jwtSecret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
+        logger.WebUILog.Infoln("log in")
+        logger.WebUILog.Infoln(jwtSecret)
 
-func Login(c *gin.Context) {
-    logger.WebUILog.Infoln("log in")
+        var userRequest configmodels.User
+        err := c.ShouldBindJSON(&userRequest)
+        if err != nil {
+            logger.AuthLog.Errorln(err)
+            c.String(http.StatusBadRequest, "invalid data provided")
+            return
+        }
+        if userRequest.Username == "" {
+            c.String(http.StatusBadRequest, "username is required")
+			return
+		}
+		if userRequest.Password == "" {
+            c.String(http.StatusBadRequest, "password is required")
+			return
+		}
 
-    c.JSON(http.StatusOK, nil)
+        filter := bson.M{"username": userRequest.Username}
+        rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+        if err != nil {
+            logger.DbLog.Errorln(err)
+            c.String(http.StatusInternalServerError, "error retrieving user account")
+            return
+        }
+        if len(rawUser) == 0 {
+            c.String(http.StatusUnauthorized, "the username or password is incorrect. Try again.")
+            return
+        }
+        var userAccount configmodels.User
+        err = json.Unmarshal(mapToByte(rawUser), &userAccount)
+        if err != nil {
+            logger.AuthLog.Errorln(err)
+            c.String(http.StatusInternalServerError, "error unmarshalling user account")
+            return
+        }
+        if err := bcrypt.CompareHashAndPassword([]byte(userAccount.Password), []byte(userRequest.Password)); err != nil {
+			c.String(http.StatusUnauthorized, "the username or password is incorrect. Try again.")
+			return
+		}
+        jwt, err := generateJWT(userAccount.Username, userAccount.Permissions, jwtSecret)
+		if err != nil {
+            logger.AuthLog.Errorln(err)
+            c.String(http.StatusInternalServerError, "error generating token")
+			return
+		}
+
+        c.JSON(http.StatusOK, gin.H{"token": jwt})
+}
 }
 
 // Generates a random 16 chars long password that contains uppercase and lowercase characters and numbers or symbols.
@@ -321,4 +383,28 @@ func validatePassword(password string) bool {
 }
 
 
+func GenerateJWTSecret() ([]byte, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return bytes, fmt.Errorf("failed to generate JWT secret: %w", err)
+	}
+	return bytes, nil
+}
+
+// Helper function to generate a JWT
+func generateJWT(username string, permissions int, jwtSecret []byte) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwtGocertClaims{
+		Username:    username,
+		Permissions: permissions,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour * 1).Unix(),
+		},
+	})
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
 

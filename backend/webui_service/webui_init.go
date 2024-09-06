@@ -173,7 +173,12 @@ func (webui *WEBUI) Start() {
 	configapi.AddServiceSub(subconfig_router)
 	configapi.AddService(subconfig_router)
 	if factory.WebUIConfig.Configuration.EnableAuthentication {
-		authentication.AddService(subconfig_router)
+		jwtSecret, err := authentication.GenerateJWTSecret()
+		if err != nil {
+			initLog.Error(err)
+		} else {
+			authentication.AddService(subconfig_router, jwtSecret)
+		}
 	}
 
 	go metrics.InitMetrics()
