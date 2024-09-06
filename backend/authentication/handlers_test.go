@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type MockMongoClientEmptyDB struct {
@@ -35,10 +36,10 @@ type MockMongoClientRegularUser struct {
 	dbadapter.DBInterface
 }
 
-//func hashPassword(password string) string {
-//	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-//	return string(hashed)
-//}
+func hashPassword(password string) string {
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hashed)
+}
 
 func (m *MockMongoClientEmptyDB) RestfulAPIGetOne(collName string, filter bson.M) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
@@ -76,22 +77,22 @@ func (m *MockMongoClientInvalidUser) RestfulAPIGetOne(collName string, filter bs
 func (m *MockMongoClientInvalidUser) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
 	rawUsers := []map[string]interface{}{
 		{"username": "johndoe", "password": 1234, "permissions": 0},
-		{"username": "janedoe", "password": "password123", "permissions": 1},
+		{"username": "janedoe", "password": hashPassword("password123"), "permissions": 1},
 	}
 	return rawUsers, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-		"username": "janedoe", "password": "password123", "permissions": 1,
+		"username": "janedoe", "password": hashPassword("password123"), "permissions": 1,
 	}
 	return rawUser, nil
 }
 
 func (m *MockMongoClientSuccess) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
 	rawUsers := []map[string]interface{}{
-		{"username": "johndoe", "password": "password123", "permissions": 0},
-		{"username": "janedoe", "password": "password123", "permissions": 1},
+		{"username": "johndoe", "password": hashPassword("password123"), "permissions": 0},
+		{"username": "janedoe", "password": hashPassword("password123"), "permissions": 1},
 	}
 	return rawUsers, nil
 }
@@ -102,7 +103,7 @@ func (m *MockMongoClientSuccess) RestfulAPIPost(collName string, filter bson.M, 
 
 func (m *MockMongoClientRegularUser) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
 	rawUser := map[string]interface{}{
-		"username": "janedoe", "password": "password123", "permissions": 0,
+		"username": "janedoe", "password": hashPassword("password123"), "permissions": 0,
 	}
 	return rawUser, nil
 }
@@ -433,6 +434,100 @@ func TestChangePassword(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(tc.inputData))
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			if tc.expectedCode != w.Code {
+				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+			}
+			if w.Body.String() != tc.expectedBody {
+				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			}
+		})
+	}
+}
+
+var mockGenerateJWT = func(username string, permissions int, jwtSecret []byte) (string, error) {
+	// Return a static token for testing
+	return "mocked.jwt.token", nil
+}
+
+func TestLogin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	router.POST("/login", Login(mockJWTSecret))
+	generateJWTFunc = mockGenerateJWT
+
+	testCases := []struct {
+		name         string
+		dbAdapter    dbadapter.DBInterface
+		inputData    string
+		expectedCode int
+		expectedBody string
+	}{
+		{
+			name:         "Success",
+			dbAdapter:    &MockMongoClientSuccess{},
+			inputData:    `{"username":"testuser", "password":"password123"}`,
+			expectedCode: http.StatusOK,
+			expectedBody: `{"token":"mocked.jwt.token"}`,
+		},
+		{
+			name:         "InvalidDataProvided",
+			dbAdapter:    &MockMongoClientSuccess{},
+			inputData:    `{"username":"testuser", "password": 123}`,
+			expectedCode: http.StatusBadRequest,
+			expectedBody: "invalid data provided",
+		},
+		{
+			name:         "NoUsernameProvided",
+			dbAdapter:    &MockMongoClientSuccess{},
+			inputData:    `{"password": "123"}`,
+			expectedCode: http.StatusBadRequest,
+			expectedBody: "username is required",
+		},
+		{
+			name:         "NoPasswordProvided",
+			dbAdapter:    &MockMongoClientSuccess{},
+			inputData:    `{"username":"testuser"}`,
+			expectedCode: http.StatusBadRequest,
+			expectedBody: "password is required",
+		},
+		{
+			name:         "DBError",
+			dbAdapter:    &MockMongoClientDBError{},
+			inputData:    `{"username":"testuser", "password":"password123"}`,
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "error retrieving user account",
+		},
+		{
+			name:         "UserNotFound",
+			dbAdapter:    &MockMongoClientEmptyDB{},
+			inputData:    `{"username":"testuser", "password":"password123"}`,
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "the username or password is incorrect. Try again.",
+		},
+		{
+			name:         "InvalidUserObtainedFromDB",
+			dbAdapter:    &MockMongoClientInvalidUser{},
+			inputData:    `{"username":"testuser", "password":"password123"}`,
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "error unmarshalling user account",
+		},
+		{
+			name:         "IncorrectPassword",
+			dbAdapter:    &MockMongoClientSuccess{},
+			inputData:    `{"username":"testuser", "password":"a-password"}`,
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "the username or password is incorrect. Try again.",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbadapter.CommonDBClient = tc.dbAdapter
+			req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader(tc.inputData))
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)

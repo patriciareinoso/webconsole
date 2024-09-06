@@ -33,6 +33,7 @@ const userAccountDataColl = "webconsoleData.snapshots.userAccountData"
 var (
 	generatePasswordFunc = generatePassword
 	validatePasswordFunc = validatePassword
+	generateJWTFunc      = generateJWT
 )
 
 func mapToByte(data map[string]interface{}) (ret []byte) {
@@ -331,7 +332,7 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 			c.String(http.StatusUnauthorized, "the username or password is incorrect. Try again.")
 			return
 		}
-		jwt, err := generateJWT(userAccount.Username, userAccount.Permissions, jwtSecret)
+		jwt, err := generateJWTFunc(userAccount.Username, userAccount.Permissions, jwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err)
 			c.String(http.StatusInternalServerError, "error generating token")
