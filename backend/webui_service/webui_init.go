@@ -168,18 +168,24 @@ func (webui *WEBUI) Start() {
 
 	/* First HTTP Server running at port to receive Config from ROC */
 	subconfig_router := loggerUtil.NewGinWithLogrus(logger.GinLog)
-	AddSwaggerUiService(subconfig_router)
-	AddUiService(subconfig_router)
-	configapi.AddServiceSub(subconfig_router)
-	configapi.AddService(subconfig_router)
 	if factory.WebUIConfig.Configuration.EnableAuthentication {
 		jwtSecret, err := authentication.GenerateJWTSecret()
 		if err != nil {
 			initLog.Error(err)
 		} else {
+			ctx := authentication.MiddlewareContext{
+				ResponseStatusCode: 0,
+				JwtSecret:          jwtSecret,
+				FirstAccountIssued: false,
+			}
+			subconfig_router.Use(authentication.AuthMiddleware(&ctx))
 			authentication.AddService(subconfig_router, jwtSecret)
 		}
 	}
+	AddSwaggerUiService(subconfig_router)
+	AddUiService(subconfig_router)
+	configapi.AddServiceSub(subconfig_router)
+	configapi.AddService(subconfig_router)
 
 	go metrics.InitMetrics()
 
