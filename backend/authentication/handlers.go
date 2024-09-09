@@ -4,22 +4,16 @@
 package authentication
 
 import (
-	//"errors"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-
-	//"strings"
 	"math/big"
 	mrand "math/rand"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	//"github.com/omec-project/util/httpwrapper"
-	"regexp"
-
 	"github.com/golang-jwt/jwt"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/configmodels"
@@ -56,27 +50,44 @@ func toBsonM(data interface{}) (ret bson.M) {
 
 func GetUserAccounts(jwtSecret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logger.WebUILog.Infoln("get all user accounts")
-		rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
-		if errGetMany != nil {
-			logger.DbLog.Errorln(errGetMany)
-			c.String(http.StatusInternalServerError, "error retrieving user accounts from DB")
+		users, err := FetchUserAccounts()
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
 			return
-		}
-		var users []*configmodels.User
-		users = make([]*configmodels.User, 0)
-		for _, rawUser := range rawUsers {
-			var userData configmodels.User
-			err := json.Unmarshal(mapToByte(rawUser), &userData)
-			if err != nil {
-				logger.AuthLog.Errorf("Could not unmarshall user")
-				continue
-			}
-			userData.Password = ""
-			users = append(users, &userData)
 		}
 		c.JSON(http.StatusOK, users)
 	}
+}
+
+func FetchUserAccounts() ([]*configmodels.User, error) {
+	rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
+	if errGetMany != nil {
+		logger.DbLog.Errorln(errGetMany)
+		return nil, fmt.Errorf("error retrieving user accounts from DB")
+	}
+
+	var users []*configmodels.User
+	users = make([]*configmodels.User, 0)
+	for _, rawUser := range rawUsers {
+		var userData configmodels.User
+		err := json.Unmarshal(mapToByte(rawUser), &userData)
+		if err != nil {
+			logger.AuthLog.Errorf("Could not unmarshall user")
+			continue
+		}
+		userData.Password = ""
+		users = append(users, &userData)
+	}
+
+	return users, nil
+}
+
+func IsFirstAccountIssued() (bool, error) {
+	users, err := FetchUserAccounts()
+	if err != nil {
+		return false, err
+	}
+	return len(users) > 0, nil
 }
 
 func GetUserAccount(jwtSecret []byte) gin.HandlerFunc {
@@ -85,18 +96,6 @@ func GetUserAccount(jwtSecret []byte) gin.HandlerFunc {
 
 		var err error
 		username := c.Param("username")
-		/*
-		   if id == "me" {
-		       claims, headerErr := getClaimsFromAuthorizationHeader(c.Header.Get("Authorization"), env.JWTSecret)
-		       if headerErr != nil {
-		           logger.DbLog.Errorln(err)
-		           c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-		           return
-		       }
-		       filter := bson.M{"username": claims.Username}
-		   } else {
-		       filter := bson.M{"id": id}
-		   }*/
 		filter := bson.M{"username": username}
 		rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 		logger.DbLog.Errorln(rawUser)
@@ -238,19 +237,6 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.WebUILog.Infoln("change user password")
 		username := c.Param("username")
-		//if id == "me" {
-		//    claims, err := getClaimsFromAuthorizationHeader(r.Header.Get("Authorization"), env.JWTSecret)
-		//    if err != nil {
-		//        logger.DbLog.Errorln(err)
-		//        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-		//    }
-		//    userAccount, err := env.DB.RetrieveUserByUsername(claims.Username)
-		//    if err != nil {
-		//        logger.DbLog.Errorln(err)
-		//        c.JSON(http.StatusUnauthorized, gin.H{"error": headerErr.Error()})
-		//    }
-		//    id = strconv.Itoa(userAccount.ID)
-		//}
 		var userAccount configmodels.User
 		err := c.ShouldBindJSON(&userAccount)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
@@ -112,38 +113,66 @@ func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter
 	return nil
 }
 
+// Helper function to generate a valid JWT token.
+func generateValidToken(username string, secret []byte) string {
+	claims := jwtGocertClaims{Username: username, Permissions: USER_ACCOUNT}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString(secret)
+	return tokenString
+}
+
 func TestGetUserAccounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
 	router.GET("/account", GetUserAccounts(mockJWTSecret))
 
 	testCases := []struct {
 		name         string
+		username     string
+		permissions  int
 		dbAdapter    dbadapter.DBInterface
 		expectedCode int
 		expectedBody string
 	}{
 		{
-			name:         "DBError",
+			name:         "RegularUser_IsNotAllowedToGetUserAccounts",
+			username:     "someusername",
+			permissions:  USER_ACCOUNT,
+			dbAdapter:    &MockMongoClientSuccess{},
+			expectedCode: http.StatusForbidden,
+			expectedBody: "forbidden",
+		},
+		{
+			name:         "AdminUser_DBError",
+			username:     "someusername",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: "error retrieving user accounts from DB",
 		},
 		{
-			name:         "OneInvalidUser",
+			name:         "AdminUser_OneInvalidUser",
+			username:     "someusername",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusOK,
 			expectedBody: `[{"username":"janedoe","permissions":1}]`,
 		},
 		{
-			name:         "NoUsers",
+			name:         "AdminUser_NoUsers",
+			username:     "someusername",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusOK,
 			expectedBody: "[]",
 		},
 		{
-			name:         "SuccessManyUsers",
+			name:         "AdminUser_SuccessManyUsers",
+			username:     "someusername",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusOK,
 			expectedBody: `[{"username":"johndoe","permissions":0},{"username":"janedoe","permissions":1}]`,
@@ -152,7 +181,10 @@ func TestGetUserAccounts(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
+			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodGet, "/account", nil)
+			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
@@ -167,47 +199,183 @@ func TestGetUserAccounts(t *testing.T) {
 	}
 }
 
+func TestGetUserAccounts_NoHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header not found"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestGetUserAccounts_BearerButNoToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
+	invalidToken := "Bearer"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestGetUserAccounts_InvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
+	invalidToken := "Bearer sometoken"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: token is not valid"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
 func TestGetUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
 	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
 
 	testCases := []struct {
 		name         string
+		username     string
+		permissions  int
 		dbAdapter    dbadapter.DBInterface
 		expectedCode int
 		expectedBody string
 	}{
 		{
-			name:         "Success",
+			name:         "RegularUser_GetOwnUserAccount",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusOK,
 			expectedBody: `{"username":"janedoe","permissions":1}`,
 		},
 		{
-			name:         "DBError",
+			name:         "AdminUser_GetOwnUserAccount",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientSuccess{},
+			expectedCode: http.StatusOK,
+			expectedBody: `{"username":"janedoe","permissions":1}`,
+		},
+		{
+			name:         "RegularUser_GetOtherUserAccount",
+			username:     "someuser",
+			permissions:  USER_ACCOUNT,
+			dbAdapter:    &MockMongoClientSuccess{},
+			expectedCode: http.StatusForbidden,
+			expectedBody: "forbidden",
+		},
+		{
+			name:         "AdminUser_GetOtherUserAccount",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientSuccess{},
+			expectedCode: http.StatusOK,
+			expectedBody: `{"username":"janedoe","permissions":1}`,
+		},
+		{
+			name:         "RegularUser_DBError",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `error retrieving user account from DB`,
+			expectedBody: "error retrieving user account from DB",
 		},
 		{
-			name:         "UserNotFound",
+			name:         "AdminUser_DBError",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientDBError{},
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "error retrieving user account from DB",
+		},
+		{
+			name:         "RegularUser_UserNotFound",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: `error: username not found`,
+			expectedBody: "error: username not found",
 		},
 		{
-			name:         "InvalidUser",
+			name:         "AdminUser_UserNotFound",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientEmptyDB{},
+			expectedCode: http.StatusNotFound,
+			expectedBody: "error: username not found",
+		},
+		{
+			name:         "RegularUser_InvalidUser",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `error unmarshalling user account`,
+			expectedBody: "error unmarshalling user account",
+		},
+		{
+			name:         "AdminUser_InvalidUser",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientInvalidUser{},
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "error unmarshalling user account",
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
+			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
+			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
+			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
@@ -219,6 +387,79 @@ func TestGetUserAccount(t *testing.T) {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestGetUserAccount_NoHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header not found"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestGetUserAccount_BearerButNoToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
+	invalidToken := "Bearer"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestGetUserAccount_InvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
+	invalidToken := "Bearer sometoken"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: token is not valid"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
 	}
 }
 
@@ -234,10 +475,14 @@ func TestPostUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
 	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
 
 	testCases := []struct {
 		name                 string
+		username             string
+		permissions          int
 		dbAdapter            dbadapter.DBInterface
 		generatePasswordMock func() (string, error)
 		inputData            string
@@ -245,7 +490,19 @@ func TestPostUserAccount(t *testing.T) {
 		expectedBody         string
 	}{
 		{
-			name:                 "CreateSecondUserWithoutPassword",
+			name:                 "RegularUser_CreateSecond",
+			username:             "someusername",
+			permissions:          USER_ACCOUNT,
+			dbAdapter:            &MockMongoClientSuccess{},
+			generatePasswordMock: mockGeneratePassword,
+			inputData:            "{}",
+			expectedCode:         http.StatusForbidden,
+			expectedBody:         "forbidden",
+		},
+		{
+			name:                 "AdminUser_CreateSecondUserWithoutPassword",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientSuccess{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            "{}",
@@ -253,31 +510,29 @@ func TestPostUserAccount(t *testing.T) {
 			expectedBody:         `{"password":"ValidPass123!"}`,
 		},
 		{
-			name:                 "CreateFirstUserWithoutPassword",
-			dbAdapter:            &MockMongoClientEmptyDB{},
-			generatePasswordMock: mockGeneratePassword,
-			inputData:            "{}",
-			expectedCode:         http.StatusCreated,
-			expectedBody:         `{"password":"ValidPass123!"}`,
-		},
-		{
-			name:                 "CreateFirstUserWithPassword",
-			dbAdapter:            &MockMongoClientEmptyDB{},
+			name:                 "AdminUser_CreateSecondUserWithPassword",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
+			dbAdapter:            &MockMongoClientSuccess{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"password" : "Admin1234"}`,
 			expectedCode:         http.StatusCreated,
 			expectedBody:         `{}`,
 		},
 		{
-			name:                 "DBError",
+			name:                 "AdminUser_DBError",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientDBError{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"password" : "Admin1234"}`,
 			expectedCode:         http.StatusInternalServerError,
-			expectedBody:         "failed to retrieve users",
+			expectedBody:         "error checking admin user account",
 		},
 		{
-			name:                 "InvalidPassword",
+			name:                 "AdminUser_InvalidPassword",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientSuccess{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"password" : "1234"}`,
@@ -285,7 +540,9 @@ func TestPostUserAccount(t *testing.T) {
 			expectedBody:         "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
 		},
 		{
-			name:                 "ErrorGeneratingPassword",
+			name:                 "AdminUser_ErrorGeneratingPassword",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientSuccess{},
 			generatePasswordMock: mockGeneratePasswordFailure,
 			inputData:            "{}",
@@ -293,7 +550,9 @@ func TestPostUserAccount(t *testing.T) {
 			expectedBody:         "failed to generate password",
 		},
 		{
-			name:                 "InvalidJsonProvided",
+			name:                 "AdminUser_InvalidJsonProvided",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientSuccess{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"password": 1234}`,
@@ -305,9 +564,11 @@ func TestPostUserAccount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			generatePasswordFunc = tc.generatePasswordMock
 			dbadapter.CommonDBClient = tc.dbAdapter
-
+			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
+			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(tc.inputData))
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
@@ -321,44 +582,170 @@ func TestPostUserAccount(t *testing.T) {
 	}
 }
 
+func TestPostUserAccounts_CreateFirstUserWithoutHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dbadapter.CommonDBClient = &MockMongoClientEmptyDB{}
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(`{"password":"ValidPass123!"}`))
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusCreated
+	expectedBody := "{}"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestPostUserAccounts_CreateSecondUserWithoutHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(`{"password":"ValidPass123!"}`))
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header not found"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestPostUserAccounts_CreateSecondUserBearerButNoToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(`{"password":"ValidPass123!"}`))
+	invalidToken := "Bearer"
+	req.Header.Set("Authorization", invalidToken)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestPostUserAccounts_CreateSecondInvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(`{"password":"ValidPass123!"}`))
+	invalidToken := "Bearer sometoken"
+	req.Header.Set("Authorization", invalidToken)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: token is not valid"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
 func TestDeleteUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
 	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
 
 	testCases := []struct {
 		name         string
+		username     string
+		permissions  int
 		dbAdapter    dbadapter.DBInterface
 		expectedCode int
 		expectedBody string
 	}{
 		{
-			name:         "DeleteRegularUser",
+			name:         "RegularUser_DeleteAnotherUser",
+			username:     "someuser",
+			permissions:  USER_ACCOUNT,
+			dbAdapter:    &MockMongoClientRegularUser{},
+			expectedCode: http.StatusForbidden,
+			expectedBody: "forbidden",
+		},
+		{
+			name:         "RegularUser_DeleteThemselves",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
+			dbAdapter:    &MockMongoClientRegularUser{},
+			expectedCode: http.StatusForbidden,
+			expectedBody: "forbidden",
+		},
+		{
+			name:         "AdminUser_DeleteRegularUser",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientRegularUser{},
 			expectedCode: http.StatusOK,
 			expectedBody: "{}",
 		},
 		{
-			name:         "DeleteAdminUser",
+			name:         "AdminUser_DeleteAdminUser",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusBadRequest,
 			expectedBody: "deleting an Admin account is not allowed.",
 		},
 		{
-			name:         "InvalidUser",
+			name:         "AdminUser_DeleteInvalidUser",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: "error unmarshalling user account",
 		},
 		{
-			name:         "UserNotFound",
+			name:         "AdminUser_UserNotFound",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
 			expectedBody: "error: username not found",
 		},
 		{
-			name:         "DBError",
+			name:         "AdminUser_DBError",
+			username:     "someuser",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: "error retrieving user account",
@@ -368,6 +755,9 @@ func TestDeleteUserAccount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
+			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
+			validToken := "Bearer " + jwtToken
+			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
@@ -381,49 +771,136 @@ func TestDeleteUserAccount(t *testing.T) {
 	}
 }
 
+func TestDeleteUserAccount_NoHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header not found"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestDeleteUserAccount_BearerButNoToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
+	invalidToken := "Bearer"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
+func TestDeleteUserAccount_InvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
+	invalidToken := "Bearer sometoken"
+	req.Header.Set("Authorization", invalidToken)
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	expectedCode := http.StatusUnauthorized
+	expectedBody := "auth failed: token is not valid"
+	if expectedCode != w.Code {
+		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+	}
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
 	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
 
 	testCases := []struct {
 		name         string
+		username     string
+		permissions  int
 		dbAdapter    dbadapter.DBInterface
 		inputData    string
 		expectedCode int
 		expectedBody string
 	}{
 		{
-			name:         "Success",
+			name:         "AdminUser_ChangeTheirOwnPassword",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusOK,
 			expectedBody: "{}",
 		},
 		{
-			name:         "DBError",
+			name:         "AdminUser_DBError",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: "failed to update user",
 		},
 		{
-			name:         "InvalidPassword",
+			name:         "AdminUser_InvalidPassword",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    nil,
 			inputData:    `{"password": "1234"}`,
 			expectedCode: http.StatusBadRequest,
 			expectedBody: "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
 		},
 		{
-			name:         "NoPasswordProvided",
+			name:         "AdminUser_NoPasswordProvided",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    nil,
 			inputData:    `{}`,
 			expectedCode: http.StatusBadRequest,
 			expectedBody: "password is required",
 		},
 		{
-			name:         "InvalidData",
+			name:         "AdminUser_InvalidData",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    nil,
 			inputData:    `{"password": 1234}`,
 			expectedCode: http.StatusBadRequest,
@@ -434,6 +911,9 @@ func TestChangePassword(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(tc.inputData))
+			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
+			validToken := "Bearer " + jwtToken
+			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)

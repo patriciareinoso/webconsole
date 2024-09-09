@@ -44,15 +44,19 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		/*
-			if c.Request.Method == "POST" && strings.HasSuffix(c.Request.URL.Path, "account") && !ctx.FirstAccountIssued {
-				c.Next()
-				if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
-					ctx.FirstAccountIssued = true
-				}
+
+		if c.Request.Method == "POST" { //&& strings.HasSuffix(c.Request.URL.Path, "account") {
+			firstAccountIssued, err := IsFirstAccountIssued()
+			if err != nil {
+				c.String(http.StatusInternalServerError, "error checking admin user account")
+				c.Abort()
 				return
 			}
-		*/
+			if !firstAccountIssued {
+				c.Next()
+				return
+			}
+		}
 		claims, err := getClaimsFromAuthorizationHeader(c.Request.Header.Get("Authorization"), ctx.JwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err)
@@ -88,7 +92,7 @@ func getClaimsFromAuthorizationHeader(header string, JwtSecret []byte) (*jwtGoce
 	}
 	claims, err := getClaimsFromJWT(bearerToken[1], JwtSecret)
 	if err != nil {
-		return nil, fmt.Errorf("token is not valid: %s", err)
+		return nil, fmt.Errorf("token is not valid")
 	}
 	return claims, nil
 }
