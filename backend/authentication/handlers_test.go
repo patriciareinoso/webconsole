@@ -151,7 +151,7 @@ func TestGetUserAccounts(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error retrieving user accounts from DB",
+			expectedBody: `{"error":"error retrieving user accounts from DB"}`,
 		},
 		{
 			name:         "AdminUser_OneInvalidUser",
@@ -326,7 +326,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error retrieving user account from DB",
+			expectedBody: `{"error":"error retrieving user account from DB"}`,
 		},
 		{
 			name:         "AdminUser_DBError",
@@ -334,7 +334,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error retrieving user account from DB",
+			expectedBody: `{"error":"error retrieving user account from DB"}`,
 		},
 		{
 			name:         "RegularUser_UserNotFound",
@@ -342,7 +342,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: "error: username not found",
+			expectedBody: `{"error":"username not found"}`,
 		},
 		{
 			name:         "AdminUser_UserNotFound",
@@ -350,7 +350,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: "error: username not found",
+			expectedBody: `{"error":"username not found"}`,
 		},
 		{
 			name:         "RegularUser_InvalidUser",
@@ -358,7 +358,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error unmarshalling user account",
+			expectedBody: `{"error":"error unmarshalling user account"}`,
 		},
 		{
 			name:         "AdminUser_InvalidUser",
@@ -366,7 +366,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error unmarshalling user account",
+			expectedBody: `{"error":"error unmarshalling user account"}`,
 		},
 	}
 	for _, tc := range testCases {
@@ -507,7 +507,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            "{}",
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         "username is required",
+			expectedBody:         `{"error":"username is required"}`,
 		},
 		{
 			name:                 "AdminUser_CreateSecondUserWithoutPassword",
@@ -537,7 +537,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password" : "Admin1234"}`,
 			expectedCode:         http.StatusInternalServerError,
-			expectedBody:         "error checking admin user account",
+			expectedBody:         `{"error":"error checking admin user account"}`,
 		},
 		{
 			name:                 "AdminUser_InvalidPassword",
@@ -547,7 +547,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password" : "1234"}`,
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
+			expectedBody:         `{"error":"Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
 		},
 		{
 			name:                 "AdminUser_ErrorGeneratingPassword",
@@ -557,7 +557,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePasswordFailure,
 			inputData:            `{"username": "adminadmin"}`,
 			expectedCode:         http.StatusInternalServerError,
-			expectedBody:         "failed to generate password",
+			expectedBody:         `{"error":"failed to generate password"}`,
 		},
 		{
 			name:                 "AdminUser_InvalidJsonProvided",
@@ -567,7 +567,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password": 1234}`,
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         "invalid data provided",
+			expectedBody:         `{"error":"invalid data provided"}`,
 		},
 	}
 	for _, tc := range testCases {
@@ -734,7 +734,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "deleting an Admin account is not allowed.",
+			expectedBody: `{"error":"deleting an Admin account is not allowed."}`,
 		},
 		{
 			name:         "AdminUser_DeleteInvalidUser",
@@ -742,7 +742,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error unmarshalling user account",
+			expectedBody: `{"error":"error unmarshalling user account"}`,
 		},
 		{
 			name:         "AdminUser_UserNotFound",
@@ -750,7 +750,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: "error: username not found",
+			expectedBody: `{"error":"username not found"}`,
 		},
 		{
 			name:         "AdminUser_DBError",
@@ -758,7 +758,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error retrieving user account",
+			expectedBody: `{"error":"error retrieving user account"}`,
 		},
 	}
 	for _, tc := range testCases {
@@ -914,7 +914,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "failed to update user",
+			expectedBody: `{"error":"failed to update user"}`,
 		},
 		{
 			name:         "RegularUser_DBError",
@@ -923,7 +923,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "failed to update user",
+			expectedBody: `{"error":"failed to update user"}`,
 		},
 		{
 			name:         "AdminUser_InvalidPassword",
@@ -932,7 +932,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": "1234"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
+			expectedBody: `{"error":"password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
 		},
 		{
 			name:         "RegularUser_InvalidPassword",
@@ -941,7 +941,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": "1234"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol.",
+			expectedBody: `{"error":"password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
 		},
 		{
 			name:         "AdminUser_NoPasswordProvided",
@@ -950,7 +950,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "password is required",
+			expectedBody: `{"error":"password is required"}`,
 		},
 		{
 			name:         "RegularUser_NoPasswordProvided",
@@ -959,7 +959,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "password is required",
+			expectedBody: `{"error":"password is required"}`,
 		},
 		{
 			name:         "AdminUser_InvalidData",
@@ -968,7 +968,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "invalid data provided",
+			expectedBody: `{"error":"invalid data provided"}`,
 		},
 		{
 			name:         "RegularUser_InvalidData",
@@ -977,7 +977,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "invalid data provided",
+			expectedBody: `{"error":"invalid data provided"}`,
 		},
 	}
 	for _, tc := range testCases {
@@ -1104,49 +1104,49 @@ func TestLogin(t *testing.T) {
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser", "password": 123}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "invalid data provided",
+			expectedBody: `{"error":"invalid data provided"}`,
 		},
 		{
 			name:         "NoUsernameProvided",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"password": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "username is required",
+			expectedBody: `{"error":"username is required"}`,
 		},
 		{
 			name:         "NoPasswordProvided",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "password is required",
+			expectedBody: `{"error":"password is required"}`,
 		},
 		{
 			name:         "DBError",
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error retrieving user account",
+			expectedBody: `{"error":"error retrieving user account"}`,
 		},
 		{
 			name:         "UserNotFound",
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusUnauthorized,
-			expectedBody: "the username or password is incorrect. Try again.",
+			expectedBody: `{"error":"the username or password is incorrect. Try again."}`,
 		},
 		{
 			name:         "InvalidUserObtainedFromDB",
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: "error unmarshalling user account",
+			expectedBody: `{"error":"error unmarshalling user account"}`,
 		},
 		{
 			name:         "IncorrectPassword",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser", "password":"a-password"}`,
 			expectedCode: http.StatusUnauthorized,
-			expectedBody: "the username or password is incorrect. Try again.",
+			expectedBody: `{"error":"the username or password is incorrect. Try again."}`,
 		},
 	}
 	for _, tc := range testCases {
