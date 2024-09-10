@@ -4,12 +4,12 @@
 package authentication
 
 import (
+	"crypto/rand"
 	"fmt"
-
-	//"log"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
@@ -34,11 +34,36 @@ type jwtGocertClaims struct {
 	jwt.StandardClaims
 }
 
+func GenerateJWTSecret() ([]byte, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return bytes, fmt.Errorf("failed to generate JWT secret: %w", err)
+	}
+	return bytes, nil
+}
+
+// Helper function to generate a JWT
+var generateJWT = func(username string, permissions int, jwtSecret []byte) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwtGocertClaims{
+		Username:    username,
+		Permissions: permissions,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour * 1).Unix(),
+		},
+	})
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
 // authMiddleware intercepts requests that need authorization to check if the user's token exists and is
 // permitted to use the endpoint
 func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !strings.HasPrefix(c.Request.URL.Path, "/account") {
+		if !strings.HasPrefix(c.Request.URL.Path, "/config/v1") && !strings.HasPrefix(c.Request.URL.Path, "/api") {
 			c.Next()
 			return
 		}
@@ -62,7 +87,7 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if claims.Permissions == USER_ACCOUNT {
+		if claims.Permissions == USER_ACCOUNT && strings.HasPrefix(c.Request.URL.Path, "/config/v1/account") {
 			requestAllowed, err := AllowRequest(claims, c.Request.Method, c.Request.URL.Path)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to authorize operation"})
@@ -112,8 +137,8 @@ func AllowRequest(claims *jwtGocertClaims, method, path string) (bool, error) {
 	allowedPaths := []struct {
 		method, pathRegex string
 	}{
-		{"GET", `/account\/(\w+)$`},
-		{"POST", `/account\/(\w+)\/change_password$`},
+		{"GET", `/config/v1/account\/(\w+)$`},
+		{"POST", `/config/v1/account\/(\w+)\/change_password$`},
 	}
 	for _, pr := range allowedPaths {
 		regex, err := regexp.Compile(pr.pathRegex)

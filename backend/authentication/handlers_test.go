@@ -132,11 +132,11 @@ func TestMiddleware_NoHeaderRequest(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	router.GET("/config/v1/account", GetUserAccounts)
+	router.GET("/config/v1/account/:username", GetUserAccount)
+	router.POST("/config/v1/account", PostUserAccount)
+	router.POST("/config/v1/account/:username/change_password", ChangeUserAccountPasssword)
+	router.DELETE("/config/v1/account/:username", DeleteUserAccount)
 
 	testCases := []struct {
 		name   string
@@ -146,27 +146,27 @@ func TestMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "GetUserAccount",
 			method: http.MethodGet,
-			url:    "/account/janedoe",
+			url:    "/config/v1/account/janedoe",
 		},
 		{
 			name:   "GetUserAccounts",
 			method: http.MethodGet,
-			url:    "/account",
+			url:    "/config/v1/account",
 		},
 		{
 			name:   "PostSecondUserAccount",
 			method: http.MethodPost,
-			url:    "/account",
+			url:    "/config/v1/account",
 		},
 		{
 			name:   "DeleteUserAccount",
 			method: http.MethodDelete,
-			url:    "/account/janedoe",
+			url:    "/config/v1/account/janedoe",
 		},
 		{
 			name:   "ChangePassword",
 			method: http.MethodPost,
-			url:    "/account/janedoe/change_password",
+			url:    "/config/v1/account/janedoe/change_password",
 		},
 	}
 	for _, tc := range testCases {
@@ -195,11 +195,11 @@ func TestMiddleware_InvalidHeaderRequest(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	router.GET("/config/v1/account", GetUserAccounts)
+	router.GET("/config/v1/account/:username", GetUserAccount)
+	router.POST("/config/v1/account", PostUserAccount)
+	router.POST("/config/v1/account/:username/change_password", ChangeUserAccountPasssword)
+	router.DELETE("/config/v1/account/:username", DeleteUserAccount)
 
 	testCases := []struct {
 		name         string
@@ -211,70 +211,70 @@ func TestMiddleware_InvalidHeaderRequest(t *testing.T) {
 		{
 			name:         "GetUserAccount_InvalidFormat",
 			method:       http.MethodGet,
-			url:          "/account/janedoe",
+			url:          "/config/v1/account/janedoe",
 			invalidToken: "Bearer",
 			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
 		},
 		{
 			name:         "GetUserAccounts_InvalidFormat",
 			method:       http.MethodGet,
-			url:          "/account",
+			url:          "/config/v1/account",
 			invalidToken: "Bear s",
 			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
 		},
 		{
 			name:         "CreateSecondUserAccount_InvalidFormat",
 			method:       http.MethodPost,
-			url:          "/account",
+			url:          "/config/v1/account",
 			invalidToken: "Bearer",
 			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
 		},
 		{
 			name:         "DeleteUserAccount_InvalidFormat",
 			method:       http.MethodDelete,
-			url:          "/account/janedoe",
+			url:          "/config/v1/account/janedoe",
 			invalidToken: "Bearer",
 			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
 		},
 		{
 			name:         "ChangePassword_InvalidFormat",
 			method:       http.MethodPost,
-			url:          "/account/janedoe/change_password",
+			url:          "/config/v1/account/janedoe/change_password",
 			invalidToken: "Bearer",
 			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
 		},
 		{
 			name:         "GetUserAccount_InvalidToken",
 			method:       http.MethodGet,
-			url:          "/account/janedoe",
+			url:          "/config/v1/account/janedoe",
 			invalidToken: "Bearer sometoken",
 			expectedBody: `{"error":"auth failed: token is not valid"}`,
 		},
 		{
 			name:         "GetUserAccounts_InvalidToken",
 			method:       http.MethodGet,
-			url:          "/account",
+			url:          "/config/v1/account",
 			invalidToken: "Bearer sometoken",
 			expectedBody: `{"error":"auth failed: token is not valid"}`,
 		},
 		{
 			name:         "CreateSecondUserAccount_InvalidToken",
 			method:       http.MethodPost,
-			url:          "/account",
+			url:          "/config/v1/account",
 			invalidToken: "Bearer sometoken",
 			expectedBody: `{"error":"auth failed: token is not valid"}`,
 		},
 		{
 			name:         "DeleteUserAccount_InvalidToken",
 			method:       http.MethodDelete,
-			url:          "/account/janedoe",
+			url:          "/config/v1/account/janedoe",
 			invalidToken: "Bearer token",
 			expectedBody: `{"error":"auth failed: token is not valid"}`,
 		},
 		{
 			name:         "ChangePassword_InvalidToken",
 			method:       http.MethodPost,
-			url:          "/account/janedoe/change_password",
+			url:          "/config/v1/account/janedoe/change_password",
 			invalidToken: "Bearer mytoken",
 			expectedBody: `{"error":"auth failed: token is not valid"}`,
 		},
@@ -284,7 +284,6 @@ func TestMiddleware_InvalidHeaderRequest(t *testing.T) {
 			req, _ := http.NewRequest(tc.method, tc.url, nil)
 			req.Header.Set("Authorization", tc.invalidToken)
 			w := httptest.NewRecorder()
-
 			router.ServeHTTP(w, req)
 
 			expectedCode := http.StatusUnauthorized
@@ -305,7 +304,7 @@ func TestGetUserAccounts(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	router.GET("/config/v1/account", GetUserAccounts)
 
 	testCases := []struct {
 		name         string
@@ -361,7 +360,7 @@ func TestGetUserAccounts(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
-			req, _ := http.NewRequest(http.MethodGet, "/account", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/config/v1/account", nil)
 			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 
@@ -383,7 +382,7 @@ func TestGetUserAccount(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	router.GET("/config/v1/account/:username", GetUserAccount)
 
 	testCases := []struct {
 		name         string
@@ -479,7 +478,7 @@ func TestGetUserAccount(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
-			req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/config/v1/account/janedoe", nil)
 			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
 
@@ -501,7 +500,7 @@ func TestPostUserAccount(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
+	router.POST("/config/v1/account", PostUserAccount)
 
 	testCases := []struct {
 		name                 string
@@ -600,7 +599,7 @@ func TestPostUserAccount(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
-			req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(tc.inputData))
+			req, _ := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(tc.inputData))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", validToken)
 			w := httptest.NewRecorder()
@@ -623,8 +622,8 @@ func TestPostUserAccount_CreateFirstUserWithoutHeader(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
+	router.POST("/config/v1/account", PostUserAccount)
+	req, _ := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -645,7 +644,7 @@ func TestDeleteUserAccount(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+	router.DELETE("/config/v1/account/:username", DeleteUserAccount)
 
 	testCases := []struct {
 		name         string
@@ -715,7 +714,7 @@ func TestDeleteUserAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
+			req, _ := http.NewRequest(http.MethodDelete, "/config/v1/account/janedoe", nil)
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
 			req.Header.Set("Authorization", validToken)
@@ -738,7 +737,7 @@ func TestChangePassword(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
+	router.POST("/config/v1/account/:username/change_password", ChangeUserAccountPasssword)
 
 	testCases := []struct {
 		name         string
@@ -861,7 +860,7 @@ func TestChangePassword(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(tc.inputData))
+			req, _ := http.NewRequest(http.MethodPost, "/config/v1/account/janedoe/change_password", strings.NewReader(tc.inputData))
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
 			req.Header.Set("Authorization", validToken)
