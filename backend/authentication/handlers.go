@@ -22,7 +22,23 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const userAccountDataColl = "webconsoleData.snapshots.userAccountData"
+const (
+	errorCreateUserAccount    = "failed to create user"
+	errorDeleteAdminAccount   = "deleting an Admin account is not allowed"
+	errorDeleteUserAccount    = "failed to delete user account"
+	errorIncorrectCredentials = "incorrect username or password. Try again"
+	errorInvalidDataProvided  = "invalid data provided"
+	errorInvalidPassword      = "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
+	errorLogin                = "failed to log in"
+	errorMissingPassword      = "password is required"
+	errorMissingUsername      = "username is required"
+	errorRetrieveUserAccount  = "failed to retrieve user account from DB"
+	errorRetrieveUserAccounts = "failed to retrieve user accounts from DB"
+	errorUpdateUserAccount    = "failed to update user"
+	errorUsernameNotFound     = "username not found"
+
+	userAccountDataColl = "webconsoleData.snapshots.userAccountData"
+)
 
 var (
 	generatePasswordFunc = generatePassword
@@ -63,7 +79,7 @@ func FetchUserAccounts() ([]*configmodels.User, error) {
 	rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
 	if errGetMany != nil {
 		logger.DbLog.Errorln(errGetMany.Error())
-		return nil, fmt.Errorf("error retrieving user accounts from DB")
+		return nil, fmt.Errorf(errorRetrieveUserAccounts)
 	}
 	var users []*configmodels.User
 	users = make([]*configmodels.User, 0)
@@ -71,7 +87,7 @@ func FetchUserAccounts() ([]*configmodels.User, error) {
 		var userData configmodels.User
 		err := json.Unmarshal(mapToByte(rawUser), &userData)
 		if err != nil {
-			logger.AuthLog.Errorf("could not unmarshall user account")
+			logger.AuthLog.Errorf(errorRetrieveUserAccount)
 			continue
 		}
 		userData.Password = ""
@@ -97,18 +113,18 @@ func GetUserAccount(jwtSecret []byte) gin.HandlerFunc {
 		rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 		if err != nil {
 			logger.DbLog.Errorln(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error retrieving user account from DB"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		if len(rawUser) == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "username not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": errorUsernameNotFound})
 			return
 		}
 		var userAccount configmodels.User
 		err = json.Unmarshal(mapToByte(rawUser), &userAccount)
 		if err != nil {
 			logger.AuthLog.Errorln(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error unmarshalling user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		userAccount.Password = ""
@@ -123,11 +139,11 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 		err := c.ShouldBindJSON(&user)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid data provided"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidDataProvided})
 			return
 		}
 		if user.Username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorMissingUsername})
 			return
 		}
 		var shouldGeneratePassword = user.Password == ""
@@ -135,7 +151,7 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			generatedPassword, err := generatePasswordFunc()
 			if err != nil {
 				logger.AuthLog.Errorln(err.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate password"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
 				return
 			}
 			user.Password = generatedPassword
@@ -143,27 +159,26 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 
 		if !validatePasswordFunc(user.Password) {
 			logger.AuthLog.Errorln("invalid password provided")
-			errorMessage := "Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s", errorMessage)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 			return
 		}
 
 		rawUsers, err := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
 		if err != nil {
 			logger.DbLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve user accounts"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccounts})
 			return
 		}
-		user.Permissions = 0
+		user.Permissions = USER_ACCOUNT
 		if len(rawUsers) == 0 {
 			logger.DbLog.Errorln(len(rawUsers))
-			user.Permissions = 1 //if this is the first user it will be admin
+			user.Permissions = ADMIN_ACCOUNT //if this is the first user it will be admin
 		}
 		password := user.Password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
 			return
 		}
 		user.Password = string(hashedPassword)
@@ -176,7 +191,7 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			//    return
 			//}
 			logger.DbLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
 			return
 		}
 		if shouldGeneratePassword {
@@ -195,30 +210,29 @@ func DeleteUserAccount(jwtSecret []byte) gin.HandlerFunc {
 		rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 		if err != nil {
 			logger.DbLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error retrieving user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		if len(rawUser) == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "username not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": errorUsernameNotFound})
 			return
 		}
 		var userAccount configmodels.User
 		err = json.Unmarshal(mapToByte(rawUser), &userAccount)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error unmarshalling user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		if userAccount.Permissions == 1 {
-			errMessage := "deleting an Admin account is not allowed."
-			logger.AuthLog.Errorln(errMessage)
-			c.JSON(http.StatusBadRequest, gin.H{"error": errMessage})
+			logger.AuthLog.Errorln(errorDeleteAdminAccount)
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorDeleteAdminAccount})
 			return
 		}
 		errDelOne := dbadapter.CommonDBClient.RestfulAPIDeleteOne(userAccountDataColl, filter)
 		if errDelOne != nil {
 			logger.DbLog.Errorln(errDelOne)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error deleting user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorDeleteUserAccount})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{})
@@ -232,16 +246,15 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 		err := c.ShouldBindJSON(&userAccount)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid data provided"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidDataProvided})
 			return
 		}
 		if userAccount.Password == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "password is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorMissingPassword})
 			return
 		}
 		if !validatePasswordFunc(userAccount.Password) {
-			errorMessage := "password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."
-			c.JSON(http.StatusBadRequest, gin.H{"error": errorMessage})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 			return
 		}
 		// CHECK IF USER EXISTS
@@ -250,7 +263,7 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorUpdateUserAccount})
 			return
 		}
 		userAccount.Password = string(hashedPassword)
@@ -260,7 +273,7 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 		_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 		if err != nil {
 			logger.DbLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorUpdateUserAccount})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{})
@@ -272,15 +285,15 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 		err := c.ShouldBindJSON(&userRequest)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid data provided"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidDataProvided})
 			return
 		}
 		if userRequest.Username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorMissingUsername})
 			return
 		}
 		if userRequest.Password == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "password is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": errorMissingPassword})
 			return
 		}
 
@@ -288,28 +301,28 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 		rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 		if err != nil {
 			logger.DbLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error retrieving user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		if len(rawUser) == 0 {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "the username or password is incorrect. Try again."})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": errorIncorrectCredentials})
 			return
 		}
 		var userAccount configmodels.User
 		err = json.Unmarshal(mapToByte(rawUser), &userAccount)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error unmarshalling user account"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
 			return
 		}
 		if err := bcrypt.CompareHashAndPassword([]byte(userAccount.Password), []byte(userRequest.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "the username or password is incorrect. Try again."})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": errorIncorrectCredentials})
 			return
 		}
 		jwt, err := generateJWTFunc(userAccount.Username, userAccount.Permissions, jwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error generating token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errorLogin})
 			return
 		}
 

@@ -5,13 +5,13 @@ package authentication
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
@@ -113,14 +113,6 @@ func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter
 	return nil
 }
 
-// Helper function to generate a valid JWT token.
-func generateValidToken(username string, secret []byte) string {
-	claims := jwtGocertClaims{Username: username, Permissions: USER_ACCOUNT}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString(secret)
-	return tokenString
-}
-
 func TestGetUserAccounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
@@ -143,7 +135,7 @@ func TestGetUserAccounts(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusForbidden,
-			expectedBody: "forbidden",
+			expectedBody: `{"error":"forbidden"}`,
 		},
 		{
 			name:         "AdminUser_DBError",
@@ -151,7 +143,7 @@ func TestGetUserAccounts(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error retrieving user accounts from DB"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccounts),
 		},
 		{
 			name:         "AdminUser_OneInvalidUser",
@@ -213,7 +205,7 @@ func TestGetUserAccounts_NoHeader(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header not found"
+	expectedBody := `{"error":"auth failed: authorization header not found"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -238,7 +230,7 @@ func TestGetUserAccounts_BearerButNoToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -263,7 +255,7 @@ func TestGetUserAccounts_InvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: token is not valid"
+	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -310,7 +302,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusForbidden,
-			expectedBody: "forbidden",
+			expectedBody: `{"error":"forbidden"}`,
 		},
 		{
 			name:         "AdminUser_GetOtherUserAccount",
@@ -326,7 +318,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error retrieving user account from DB"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "AdminUser_DBError",
@@ -334,7 +326,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error retrieving user account from DB"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "RegularUser_UserNotFound",
@@ -342,7 +334,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: `{"error":"username not found"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUsernameNotFound),
 		},
 		{
 			name:         "AdminUser_UserNotFound",
@@ -350,7 +342,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: `{"error":"username not found"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUsernameNotFound),
 		},
 		{
 			name:         "RegularUser_InvalidUser",
@@ -358,7 +350,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error unmarshalling user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "AdminUser_InvalidUser",
@@ -366,7 +358,7 @@ func TestGetUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error unmarshalling user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 	}
 	for _, tc := range testCases {
@@ -404,7 +396,7 @@ func TestGetUserAccount_NoHeader(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header not found"
+	expectedBody := `{"error":"auth failed: authorization header not found"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -429,7 +421,7 @@ func TestGetUserAccount_BearerButNoToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -454,7 +446,7 @@ func TestGetUserAccount_InvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: token is not valid"
+	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -497,7 +489,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin"}`,
 			expectedCode:         http.StatusForbidden,
-			expectedBody:         "forbidden",
+			expectedBody:         `{"error":"forbidden"}`,
 		},
 		{
 			name:                 "AdminUser_CreateSecondUserWithoutUsername",
@@ -507,7 +499,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            "{}",
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         `{"error":"username is required"}`,
+			expectedBody:         fmt.Sprintf(`{"error":"%s"}`, errorMissingUsername),
 		},
 		{
 			name:                 "AdminUser_CreateSecondUserWithoutPassword",
@@ -537,7 +529,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password" : "Admin1234"}`,
 			expectedCode:         http.StatusInternalServerError,
-			expectedBody:         `{"error":"error checking admin user account"}`,
+			expectedBody:         `{"error":"failed to authorize user account creation"}`,
 		},
 		{
 			name:                 "AdminUser_InvalidPassword",
@@ -547,7 +539,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password" : "1234"}`,
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         `{"error":"Password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
+			expectedBody:         fmt.Sprintf(`{"error":"%s"}`, errorInvalidPassword),
 		},
 		{
 			name:                 "AdminUser_ErrorGeneratingPassword",
@@ -557,7 +549,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePasswordFailure,
 			inputData:            `{"username": "adminadmin"}`,
 			expectedCode:         http.StatusInternalServerError,
-			expectedBody:         `{"error":"failed to generate password"}`,
+			expectedBody:         fmt.Sprintf(`{"error":"%s"}`, errorCreateUserAccount),
 		},
 		{
 			name:                 "AdminUser_InvalidJsonProvided",
@@ -567,7 +559,7 @@ func TestPostUserAccount(t *testing.T) {
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password": 1234}`,
 			expectedCode:         http.StatusBadRequest,
-			expectedBody:         `{"error":"invalid data provided"}`,
+			expectedBody:         fmt.Sprintf(`{"error":"%s"}`, errorInvalidDataProvided),
 		},
 	}
 	for _, tc := range testCases {
@@ -629,7 +621,7 @@ func TestPostUserAccounts_CreateSecondUserWithoutHeader(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header not found"
+	expectedBody := `{"error":"auth failed: authorization header not found"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -654,7 +646,7 @@ func TestPostUserAccounts_CreateSecondUserBearerButNoToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -679,7 +671,7 @@ func TestPostUserAccounts_CreateSecondInvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: token is not valid"
+	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -710,7 +702,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientRegularUser{},
 			expectedCode: http.StatusForbidden,
-			expectedBody: "forbidden",
+			expectedBody: `{"error":"forbidden"}`,
 		},
 		{
 			name:         "RegularUser_DeleteThemselves",
@@ -718,7 +710,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  USER_ACCOUNT,
 			dbAdapter:    &MockMongoClientRegularUser{},
 			expectedCode: http.StatusForbidden,
-			expectedBody: "forbidden",
+			expectedBody: `{"error":"forbidden"}`,
 		},
 		{
 			name:         "AdminUser_DeleteRegularUser",
@@ -734,7 +726,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientSuccess{},
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"deleting an Admin account is not allowed."}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorDeleteAdminAccount),
 		},
 		{
 			name:         "AdminUser_DeleteInvalidUser",
@@ -742,7 +734,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error unmarshalling user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "AdminUser_UserNotFound",
@@ -750,7 +742,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusNotFound,
-			expectedBody: `{"error":"username not found"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUsernameNotFound),
 		},
 		{
 			name:         "AdminUser_DBError",
@@ -758,7 +750,7 @@ func TestDeleteUserAccount(t *testing.T) {
 			permissions:  ADMIN_ACCOUNT,
 			dbAdapter:    &MockMongoClientDBError{},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error retrieving user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 	}
 	for _, tc := range testCases {
@@ -795,7 +787,7 @@ func TestDeleteUserAccount_NoHeader(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header not found"
+	expectedBody := `{"error":"auth failed: authorization header not found"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -820,7 +812,7 @@ func TestDeleteUserAccount_BearerButNoToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -845,7 +837,7 @@ func TestDeleteUserAccount_InvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: token is not valid"
+	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -896,7 +888,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusForbidden,
-			expectedBody: "forbidden",
+			expectedBody: `{"error":"forbidden"}`,
 		},
 		{
 			name:         "AdminUser_ChangeOtherUserPassword",
@@ -914,7 +906,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to update user"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUpdateUserAccount),
 		},
 		{
 			name:         "RegularUser_DBError",
@@ -923,7 +915,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to update user"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUpdateUserAccount),
 		},
 		{
 			name:         "AdminUser_InvalidPassword",
@@ -932,7 +924,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": "1234"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorInvalidPassword),
 		},
 		{
 			name:         "RegularUser_InvalidPassword",
@@ -941,7 +933,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": "1234"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"password must have 8 or more characters, must include at least one capital letter, one lowercase letter, and either a number or a symbol."}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorInvalidPassword),
 		},
 		{
 			name:         "AdminUser_NoPasswordProvided",
@@ -950,7 +942,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"password is required"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorMissingPassword),
 		},
 		{
 			name:         "RegularUser_NoPasswordProvided",
@@ -959,7 +951,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"password is required"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorMissingPassword),
 		},
 		{
 			name:         "AdminUser_InvalidData",
@@ -968,7 +960,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid data provided"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorInvalidDataProvided),
 		},
 		{
 			name:         "RegularUser_InvalidData",
@@ -977,7 +969,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    nil,
 			inputData:    `{"password": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid data provided"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorInvalidDataProvided),
 		},
 	}
 	for _, tc := range testCases {
@@ -1014,7 +1006,7 @@ func TestChangeUserPassword_NoHeader(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header not found"
+	expectedBody := `{"error":"auth failed: authorization header not found"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -1038,7 +1030,7 @@ func TestChangeUserPassword_BearerButNoToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: authorization header couldn't be processed. The expected format is 'Bearer <token>'"
+	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -1062,7 +1054,7 @@ func TestChangeUserPassword_InvalidToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expectedCode := http.StatusUnauthorized
-	expectedBody := "auth failed: token is not valid"
+	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -1104,49 +1096,49 @@ func TestLogin(t *testing.T) {
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser", "password": 123}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid data provided"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorInvalidDataProvided),
 		},
 		{
 			name:         "NoUsernameProvided",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"password": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"username is required"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorMissingUsername),
 		},
 		{
 			name:         "NoPasswordProvided",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"password is required"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorMissingPassword),
 		},
 		{
 			name:         "DBError",
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error retrieving user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "UserNotFound",
 			dbAdapter:    &MockMongoClientEmptyDB{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusUnauthorized,
-			expectedBody: `{"error":"the username or password is incorrect. Try again."}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorIncorrectCredentials),
 		},
 		{
 			name:         "InvalidUserObtainedFromDB",
 			dbAdapter:    &MockMongoClientInvalidUser{},
 			inputData:    `{"username":"testuser", "password":"password123"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"error unmarshalling user account"}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "IncorrectPassword",
 			dbAdapter:    &MockMongoClientSuccess{},
 			inputData:    `{"username":"testuser", "password":"a-password"}`,
 			expectedCode: http.StatusUnauthorized,
-			expectedBody: `{"error":"the username or password is incorrect. Try again."}`,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorIncorrectCredentials),
 		},
 	}
 	for _, tc := range testCases {

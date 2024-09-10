@@ -45,7 +45,8 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 		if c.Request.Method == "POST" && strings.HasSuffix(c.Request.URL.Path, "account") {
 			firstAccountIssued, err := IsFirstAccountIssued()
 			if err != nil {
-				c.String(http.StatusInternalServerError, "error checking admin user account")
+				logger.AuthLog.Errorln(err.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to authorize user account creation"})
 				c.Abort()
 				return
 			}
@@ -57,19 +58,19 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 		claims, err := getClaimsFromAuthorizationHeader(c.Request.Header.Get("Authorization"), ctx.JwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.String(http.StatusUnauthorized, fmt.Sprintf("auth failed: %s", err.Error()))
+			c.JSON(http.StatusUnauthorized, gin.H{"error": fmt.Sprintf("auth failed: %s", err.Error())})
 			c.Abort()
 			return
 		}
 		if claims.Permissions == USER_ACCOUNT {
 			requestAllowed, err := AllowRequest(claims, c.Request.Method, c.Request.URL.Path)
 			if err != nil {
-				c.String(http.StatusInternalServerError, fmt.Sprintf("error processing path: %s", err.Error()))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to authorize operation"})
 				c.Abort()
 				return
 			}
 			if !requestAllowed {
-				c.String(http.StatusForbidden, "forbidden")
+				c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 				c.Abort()
 				return
 			}
@@ -84,7 +85,7 @@ func getClaimsFromAuthorizationHeader(header string, JwtSecret []byte) (*jwtGoce
 	}
 	bearerToken := strings.Split(header, " ")
 	if len(bearerToken) != 2 || bearerToken[0] != "Bearer" {
-		return nil, fmt.Errorf("authorization header couldn't be processed. The expected format is 'Bearer <token>'")
+		return nil, fmt.Errorf("authorization header couldn't be processed. The expected format is 'Bearer token'")
 	}
 	claims, err := getClaimsFromJWT(bearerToken[1], JwtSecret)
 	if err != nil {
