@@ -45,7 +45,7 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 			return
 		}
 
-		if c.Request.Method == "POST" { //&& strings.HasSuffix(c.Request.URL.Path, "account") {
+		if c.Request.Method == "POST" && strings.HasSuffix(c.Request.URL.Path, "account") {
 			firstAccountIssued, err := IsFirstAccountIssued()
 			if err != nil {
 				c.String(http.StatusInternalServerError, "error checking admin user account")

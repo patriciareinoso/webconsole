@@ -131,6 +131,10 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			c.String(http.StatusBadRequest, "invalid data provided")
 			return
 		}
+		if user.Username == "" {
+			c.String(http.StatusBadRequest, "username is required")
+			return
+		}
 		var shouldGeneratePassword = user.Password == ""
 		if shouldGeneratePassword {
 			generatedPassword, err := generatePasswordFunc()
@@ -163,9 +167,6 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			logger.DbLog.Errorln(len(rawUsers))
 			user.Permissions = 1 //if this is the first user it will be admin
 		}
-
-		username := c.Param("username")
-		user.Username = username
 		password := user.Password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
