@@ -38,13 +38,10 @@ type jwtGocertClaims struct {
 // permitted to use the endpoint
 func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logger.AuthLog.Errorln("INTERCEPTING CALLS")
-
 		if !strings.HasPrefix(c.Request.URL.Path, "/account") {
 			c.Next()
 			return
 		}
-
 		if c.Request.Method == "POST" && strings.HasSuffix(c.Request.URL.Path, "account") {
 			firstAccountIssued, err := IsFirstAccountIssued()
 			if err != nil {
@@ -59,12 +56,11 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 		}
 		claims, err := getClaimsFromAuthorizationHeader(c.Request.Header.Get("Authorization"), ctx.JwtSecret)
 		if err != nil {
-			logger.AuthLog.Errorln(err)
+			logger.AuthLog.Errorln(err.Error())
 			c.String(http.StatusUnauthorized, fmt.Sprintf("auth failed: %s", err.Error()))
 			c.Abort()
 			return
 		}
-		logger.AuthLog.Errorln(claims)
 		if claims.Permissions == USER_ACCOUNT {
 			requestAllowed, err := AllowRequest(claims, c.Request.Method, c.Request.URL.Path)
 			if err != nil {

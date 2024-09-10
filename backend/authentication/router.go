@@ -73,7 +73,7 @@ var routes = Routes{
 	{
 		"PostUserAccount",
 		http.MethodPost,
-		"/account/:username",
+		"/account",
 		PostUserAccount,
 	},
 	{

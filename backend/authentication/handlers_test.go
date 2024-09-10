@@ -599,8 +599,8 @@ func TestPostUserAccounts_CreateFirstUserWithoutHeader(t *testing.T) {
 	mockJWTSecret := []byte("mockSecret")
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
-	router.POST("/account/:username", PostUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account/adminadmin", strings.NewReader(`{"password":"ValidPass123!"}`))
+	router.POST("/account", PostUserAccount(mockJWTSecret))
+	req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
