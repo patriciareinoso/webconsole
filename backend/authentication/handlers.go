@@ -40,12 +40,6 @@ const (
 	userAccountDataColl = "webconsoleData.snapshots.userAccountData"
 )
 
-var (
-	generatePasswordFunc = generatePassword
-	validatePasswordFunc = validatePassword
-	generateJWTFunc      = generateJWT
-)
-
 func mapToByte(data map[string]interface{}) (ret []byte) {
 	ret, _ = json.Marshal(data)
 	return
@@ -148,7 +142,7 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 		}
 		var shouldGeneratePassword = user.Password == ""
 		if shouldGeneratePassword {
-			generatedPassword, err := generatePasswordFunc()
+			generatedPassword, err := generatePassword()
 			if err != nil {
 				logger.AuthLog.Errorln(err.Error())
 				c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
@@ -157,7 +151,7 @@ func PostUserAccount(jwtSecret []byte) gin.HandlerFunc {
 			user.Password = generatedPassword
 		}
 
-		if !validatePasswordFunc(user.Password) {
+		if !validatePassword(user.Password) {
 			logger.AuthLog.Errorln("invalid password provided")
 			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 			return
@@ -253,7 +247,7 @@ func ChangeUserAccountPasssword(jwtSecret []byte) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errorMissingPassword})
 			return
 		}
-		if !validatePasswordFunc(userAccount.Password) {
+		if !validatePassword(userAccount.Password) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 			return
 		}
@@ -319,7 +313,7 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": errorIncorrectCredentials})
 			return
 		}
-		jwt, err := generateJWTFunc(userAccount.Username, userAccount.Permissions, jwtSecret)
+		jwt, err := generateJWT(userAccount.Username, userAccount.Permissions, jwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errorLogin})
@@ -331,7 +325,7 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 }
 
 // Generates a random 16 chars long password that contains uppercase and lowercase characters and numbers or symbols.
-func generatePassword() (string, error) {
+var generatePassword = func() (string, error) {
 	const (
 		uppercaseSet         = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		lowercaseSet         = "abcdefghijklmnopqrstuvwxyz"
@@ -399,7 +393,7 @@ func GenerateJWTSecret() ([]byte, error) {
 }
 
 // Helper function to generate a JWT
-func generateJWT(username string, permissions int, jwtSecret []byte) (string, error) {
+var generateJWT = func(username string, permissions int, jwtSecret []byte) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwtGocertClaims{
 		Username:    username,
 		Permissions: permissions,

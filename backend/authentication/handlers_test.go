@@ -113,6 +113,192 @@ func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter
 	return nil
 }
 
+func mockGeneratePassword() (string, error) {
+	return "ValidPass123!", nil
+}
+
+func mockGeneratePasswordFailure() (string, error) {
+	return "", errors.New("password generation failed")
+}
+
+var mockGenerateJWT = func(username string, permissions int, jwtSecret []byte) (string, error) {
+	return "mocked.jwt.token", nil
+}
+
+func TestMiddleware_NoHeaderRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	router.POST("/account", PostUserAccount(mockJWTSecret))
+	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+
+	testCases := []struct {
+		name   string
+		method string
+		url    string
+	}{
+		{
+			name:   "GetUserAccount",
+			method: http.MethodGet,
+			url:    "/account/janedoe",
+		},
+		{
+			name:   "GetUserAccounts",
+			method: http.MethodGet,
+			url:    "/account",
+		},
+		{
+			name:   "PostSecondUserAccount",
+			method: http.MethodPost,
+			url:    "/account",
+		},
+		{
+			name:   "DeleteUserAccount",
+			method: http.MethodDelete,
+			url:    "/account/janedoe",
+		},
+		{
+			name:   "ChangePassword",
+			method: http.MethodPost,
+			url:    "/account/janedoe/change_password",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest(tc.method, tc.url, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			expectedCode := http.StatusUnauthorized
+			expectedBody := `{"error":"auth failed: authorization header not found"}`
+			if expectedCode != w.Code {
+				t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+			}
+			if w.Body.String() != expectedBody {
+				t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestMiddleware_InvalidHeaderRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	router := gin.Default()
+	mockJWTSecret := []byte("mockSecret")
+	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
+	router.Use(AuthMiddleware(ctx))
+	router.GET("/account", GetUserAccounts(mockJWTSecret))
+	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
+	router.POST("/account", PostUserAccount(mockJWTSecret))
+	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
+	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
+
+	testCases := []struct {
+		name         string
+		method       string
+		url          string
+		invalidToken string
+		expectedBody string
+	}{
+		{
+			name:         "GetUserAccount_InvalidFormat",
+			method:       http.MethodGet,
+			url:          "/account/janedoe",
+			invalidToken: "Bearer",
+			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
+		},
+		{
+			name:         "GetUserAccounts_InvalidFormat",
+			method:       http.MethodGet,
+			url:          "/account",
+			invalidToken: "Bear s",
+			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
+		},
+		{
+			name:         "CreateSecondUserAccount_InvalidFormat",
+			method:       http.MethodPost,
+			url:          "/account",
+			invalidToken: "Bearer",
+			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
+		},
+		{
+			name:         "DeleteUserAccount_InvalidFormat",
+			method:       http.MethodDelete,
+			url:          "/account/janedoe",
+			invalidToken: "Bearer",
+			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
+		},
+		{
+			name:         "ChangePassword_InvalidFormat",
+			method:       http.MethodPost,
+			url:          "/account/janedoe/change_password",
+			invalidToken: "Bearer",
+			expectedBody: `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`,
+		},
+		{
+			name:         "GetUserAccount_InvalidToken",
+			method:       http.MethodGet,
+			url:          "/account/janedoe",
+			invalidToken: "Bearer sometoken",
+			expectedBody: `{"error":"auth failed: token is not valid"}`,
+		},
+		{
+			name:         "GetUserAccounts_InvalidToken",
+			method:       http.MethodGet,
+			url:          "/account",
+			invalidToken: "Bearer sometoken",
+			expectedBody: `{"error":"auth failed: token is not valid"}`,
+		},
+		{
+			name:         "CreateSecondUserAccount_InvalidToken",
+			method:       http.MethodPost,
+			url:          "/account",
+			invalidToken: "Bearer sometoken",
+			expectedBody: `{"error":"auth failed: token is not valid"}`,
+		},
+		{
+			name:         "DeleteUserAccount_InvalidToken",
+			method:       http.MethodDelete,
+			url:          "/account/janedoe",
+			invalidToken: "Bearer token",
+			expectedBody: `{"error":"auth failed: token is not valid"}`,
+		},
+		{
+			name:         "ChangePassword_InvalidToken",
+			method:       http.MethodPost,
+			url:          "/account/janedoe/change_password",
+			invalidToken: "Bearer mytoken",
+			expectedBody: `{"error":"auth failed: token is not valid"}`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest(tc.method, tc.url, nil)
+			req.Header.Set("Authorization", tc.invalidToken)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			expectedCode := http.StatusUnauthorized
+
+			if expectedCode != w.Code {
+				t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+			}
+			if w.Body.String() != tc.expectedBody {
+				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestGetUserAccounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
@@ -188,79 +374,6 @@ func TestGetUserAccounts(t *testing.T) {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
-	}
-}
-
-func TestGetUserAccounts_NoHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header not found"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestGetUserAccounts_BearerButNoToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
-	invalidToken := "Bearer"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestGetUserAccounts_InvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account", GetUserAccounts(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account", nil)
-	invalidToken := "Bearer sometoken"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: token is not valid"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
 	}
 }
 
@@ -382,87 +495,6 @@ func TestGetUserAccount(t *testing.T) {
 	}
 }
 
-func TestGetUserAccount_NoHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header not found"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestGetUserAccount_BearerButNoToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
-	invalidToken := "Bearer"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestGetUserAccount_InvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.GET("/account/:username", GetUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodGet, "/account/janedoe", nil)
-	invalidToken := "Bearer sometoken"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: token is not valid"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func mockGeneratePassword() (string, error) {
-	return "ValidPass123!", nil
-}
-
-func mockGeneratePasswordFailure() (string, error) {
-	return "", errors.New("password generation failed")
-}
-
 func TestPostUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
@@ -564,7 +596,7 @@ func TestPostUserAccount(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			generatePasswordFunc = tc.generatePasswordMock
+			generatePassword = tc.generatePasswordMock
 			dbadapter.CommonDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
@@ -584,7 +616,7 @@ func TestPostUserAccount(t *testing.T) {
 	}
 }
 
-func TestPostUserAccounts_CreateFirstUserWithoutHeader(t *testing.T) {
+func TestPostUserAccount_CreateFirstUserWithoutHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dbadapter.CommonDBClient = &MockMongoClientEmptyDB{}
 	router := gin.Default()
@@ -599,79 +631,6 @@ func TestPostUserAccounts_CreateFirstUserWithoutHeader(t *testing.T) {
 
 	expectedCode := http.StatusCreated
 	expectedBody := "{}"
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestPostUserAccounts_CreateSecondUserWithoutHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header not found"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestPostUserAccounts_CreateSecondUserBearerButNoToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
-	invalidToken := "Bearer"
-	req.Header.Set("Authorization", invalidToken)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestPostUserAccounts_CreateSecondInvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account", PostUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
-	invalidToken := "Bearer sometoken"
-	req.Header.Set("Authorization", invalidToken)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: token is not valid"}`
 	if expectedCode != w.Code {
 		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
 	}
@@ -770,79 +729,6 @@ func TestDeleteUserAccount(t *testing.T) {
 				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
-	}
-}
-
-func TestDeleteUserAccount_NoHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header not found"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestDeleteUserAccount_BearerButNoToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
-	invalidToken := "Bearer"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestDeleteUserAccount_InvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.DELETE("/account/:username", DeleteUserAccount(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodDelete, "/account/janedoe", nil)
-	invalidToken := "Bearer sometoken"
-	req.Header.Set("Authorization", invalidToken)
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: token is not valid"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
 	}
 }
 
@@ -992,81 +878,6 @@ func TestChangePassword(t *testing.T) {
 		})
 	}
 }
-func TestChangeUserPassword_NoHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(`{"password": "Admin1234"}`))
-
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header not found"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestChangeUserPassword_BearerButNoToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(`{"password": "Admin1234"}`))
-	invalidToken := "Bearer"
-	req.Header.Set("Authorization", invalidToken)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: authorization header couldn't be processed. The expected format is 'Bearer token'"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-func TestChangeUserPassword_InvalidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
-	router.POST("/account/:username/change_password", ChangeUserAccountPasssword(mockJWTSecret))
-	req, _ := http.NewRequest(http.MethodPost, "/account/janedoe/change_password", strings.NewReader(`{"password": "Admin1234"}`))
-	invalidToken := "Bearer sometoken"
-	req.Header.Set("Authorization", invalidToken)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	expectedCode := http.StatusUnauthorized
-	expectedBody := `{"error":"auth failed: token is not valid"}`
-	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
-	}
-	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
-	}
-}
-
-var mockGenerateJWT = func(username string, permissions int, jwtSecret []byte) (string, error) {
-	// Return a static token for testing
-	return "mocked.jwt.token", nil
-}
 
 func TestLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -1075,7 +886,7 @@ func TestLogin(t *testing.T) {
 	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
 	router.Use(AuthMiddleware(ctx))
 	router.POST("/login", Login(mockJWTSecret))
-	generateJWTFunc = mockGenerateJWT
+	generateJWT = mockGenerateJWT
 
 	testCases := []struct {
 		name         string
