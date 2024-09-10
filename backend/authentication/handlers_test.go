@@ -130,8 +130,7 @@ func TestMiddleware_NoHeaderRequest(t *testing.T) {
 	router := gin.Default()
 	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.GET("/config/v1/account", GetUserAccounts)
 	router.GET("/config/v1/account/:username", GetUserAccount)
 	router.POST("/config/v1/account", PostUserAccount)
@@ -193,8 +192,7 @@ func TestMiddleware_InvalidHeaderRequest(t *testing.T) {
 	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.GET("/config/v1/account", GetUserAccounts)
 	router.GET("/config/v1/account/:username", GetUserAccount)
 	router.POST("/config/v1/account", PostUserAccount)
@@ -302,8 +300,7 @@ func TestGetUserAccounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.GET("/config/v1/account", GetUserAccounts)
 
 	testCases := []struct {
@@ -380,8 +377,7 @@ func TestGetUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.GET("/config/v1/account/:username", GetUserAccount)
 
 	testCases := []struct {
@@ -498,8 +494,7 @@ func TestPostUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.POST("/config/v1/account", PostUserAccount)
 
 	testCases := []struct {
@@ -620,8 +615,7 @@ func TestPostUserAccount_CreateFirstUserWithoutHeader(t *testing.T) {
 	dbadapter.CommonDBClient = &MockMongoClientEmptyDB{}
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.POST("/config/v1/account", PostUserAccount)
 	req, _ := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 	w := httptest.NewRecorder()
@@ -642,8 +636,7 @@ func TestDeleteUserAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.DELETE("/config/v1/account/:username", DeleteUserAccount)
 
 	testCases := []struct {
@@ -735,8 +728,7 @@ func TestChangePassword(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.POST("/config/v1/account/:username/change_password", ChangeUserAccountPasssword)
 
 	testCases := []struct {
@@ -882,8 +874,7 @@ func TestLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
-	ctx := &MiddlewareContext{JwtSecret: mockJWTSecret}
-	router.Use(AuthMiddleware(ctx))
+	router.Use(AuthMiddleware(mockJWTSecret))
 	router.POST("/login", Login(mockJWTSecret))
 	generateJWT = mockGenerateJWT
 

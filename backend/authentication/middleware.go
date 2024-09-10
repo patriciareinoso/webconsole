@@ -21,13 +21,6 @@ const (
 	ADMIN_ACCOUNT = 1
 )
 
-// The middlewareContext type helps middleware receive and pass along information through the middleware chain.
-type MiddlewareContext struct {
-	ResponseStatusCode int
-	JwtSecret          []byte
-	FirstAccountIssued bool
-}
-
 type jwtGocertClaims struct {
 	Username    string `json:"username"`
 	Permissions int    `json:"permissions"`
@@ -61,7 +54,7 @@ var generateJWT = func(username string, permissions int, jwtSecret []byte) (stri
 
 // authMiddleware intercepts requests that need authorization to check if the user's token exists and is
 // permitted to use the endpoint
-func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
+func AuthMiddleware(jwtSecret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !strings.HasPrefix(c.Request.URL.Path, "/config/v1") && !strings.HasPrefix(c.Request.URL.Path, "/api") {
 			c.Next()
@@ -80,7 +73,7 @@ func AuthMiddleware(ctx *MiddlewareContext) gin.HandlerFunc {
 				return
 			}
 		}
-		claims, err := getClaimsFromAuthorizationHeader(c.Request.Header.Get("Authorization"), ctx.JwtSecret)
+		claims, err := getClaimsFromAuthorizationHeader(c.Request.Header.Get("Authorization"), jwtSecret)
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
 			c.JSON(http.StatusUnauthorized, gin.H{"error": fmt.Sprintf("auth failed: %s", err.Error())})

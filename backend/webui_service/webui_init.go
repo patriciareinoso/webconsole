@@ -173,12 +173,7 @@ func (webui *WEBUI) Start() {
 		if err != nil {
 			initLog.Error(err)
 		} else {
-			ctx := authentication.MiddlewareContext{
-				ResponseStatusCode: 0,
-				JwtSecret:          jwtSecret,
-				FirstAccountIssued: false,
-			}
-			subconfig_router.Use(authentication.AuthMiddleware(&ctx))
+			subconfig_router.Use(authentication.AuthMiddleware(jwtSecret))
 			authentication.AddService(subconfig_router, jwtSecret)
 		}
 	}
