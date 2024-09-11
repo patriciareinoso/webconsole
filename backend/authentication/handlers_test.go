@@ -202,7 +202,7 @@ func TestGetUserAccounts(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodGet, "/config/v1/account", nil)
@@ -319,7 +319,7 @@ func TestGetUserAccount(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodGet, "/config/v1/account/janedoe", nil)
@@ -449,7 +449,7 @@ func TestPostUserAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			generatePassword = tc.generatePasswordMock
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
 			req, _ := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(tc.inputData))
@@ -470,7 +470,7 @@ func TestPostUserAccount(t *testing.T) {
 
 func TestPostUserAccount_CreateFirstUserWithoutHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	dbadapter.CommonDBClient = &MockMongoClientEmptyDB{}
+	dbadapter.UserAccountDBClient = &MockMongoClientEmptyDB{}
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
@@ -564,7 +564,7 @@ func TestDeleteUserAccount(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodDelete, "/config/v1/account/janedoe", nil)
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
@@ -727,7 +727,7 @@ func TestChangePassword(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodPost, "/config/v1/account/janedoe/change_password", strings.NewReader(tc.inputData))
 			jwtToken, _ := generateJWT(tc.username, tc.permissions, mockJWTSecret)
 			validToken := "Bearer " + jwtToken
@@ -820,7 +820,7 @@ func TestLogin(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dbadapter.CommonDBClient = tc.dbAdapter
+			dbadapter.UserAccountDBClient = tc.dbAdapter
 			req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader(tc.inputData))
 			w := httptest.NewRecorder()
 

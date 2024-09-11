@@ -156,12 +156,12 @@ func (webui *WEBUI) FilterCli(c *cli.Context) (args []string) {
 }
 
 func (webui *WEBUI) Start() {
+	// get config file info from WebUIConfig
+	mongodb := factory.WebUIConfig.Configuration.Mongodb
 	if factory.WebUIConfig.Configuration.Mode5G {
-		// get config file info from WebUIConfig
-		mongodb := factory.WebUIConfig.Configuration.Mongodb
-
 		// Connect to MongoDB
-		dbadapter.ConnectMongo(mongodb.Url, mongodb.Name, mongodb.AuthUrl, mongodb.AuthKeysDbName)
+		dbadapter.ConnectMongo(mongodb.Url, mongodb.Name, &dbadapter.CommonDBClient)
+		dbadapter.ConnectMongo(mongodb.AuthUrl, mongodb.AuthKeysDbName, &dbadapter.AuthDBClient)
 	}
 
 	initLog.Infoln("WebUI Server started")
@@ -173,6 +173,7 @@ func (webui *WEBUI) Start() {
 		if err != nil {
 			initLog.Error(err)
 		} else {
+			dbadapter.ConnectMongo(mongodb.UserAccountUrl, mongodb.UserAccountName, &dbadapter.UserAccountDBClient)
 			subconfig_router.Use(authentication.AuthMiddleware(jwtSecret))
 			authentication.AddService(subconfig_router, jwtSecret)
 		}

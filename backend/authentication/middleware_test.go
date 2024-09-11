@@ -183,7 +183,7 @@ var protectedPaths = []struct {
 func setUp() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
-	dbadapter.CommonDBClient = &MockMongoClientSuccess{}
+	dbadapter.UserAccountDBClient = &MockMongoClientSuccess{}
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
 	AddService(router, mockJWTSecret)

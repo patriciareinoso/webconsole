@@ -66,7 +66,7 @@ func GetUserAccounts(c *gin.Context) {
 }
 
 func FetchUserAccounts() ([]*configmodels.User, error) {
-	rawUsers, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
+	rawUsers, errGetMany := dbadapter.UserAccountDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
 	if errGetMany != nil {
 		logger.DbLog.Errorln(errGetMany.Error())
 		return nil, fmt.Errorf(errorRetrieveUserAccounts)
@@ -99,7 +99,7 @@ func GetUserAccount(c *gin.Context) {
 	var err error
 	username := c.Param("username")
 	filter := bson.M{"username": username}
-	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	rawUser, err := dbadapter.UserAccountDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 	if err != nil {
 		logger.DbLog.Errorln(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
@@ -150,7 +150,7 @@ func PostUserAccount(c *gin.Context) {
 		return
 	}
 	filter := bson.M{"username": user.Username}
-	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	rawUser, err := dbadapter.UserAccountDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
@@ -161,7 +161,7 @@ func PostUserAccount(c *gin.Context) {
 		return
 	}
 
-	rawUsers, err := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
+	rawUsers, err := dbadapter.UserAccountDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccounts})
@@ -182,7 +182,7 @@ func PostUserAccount(c *gin.Context) {
 	user.Password = string(hashedPassword)
 	userBsonA := toBsonM(user)
 
-	_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
+	_, err = dbadapter.UserAccountDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
@@ -199,7 +199,7 @@ func DeleteUserAccount(c *gin.Context) {
 	logger.WebUILog.Infoln("delete user account")
 	username := c.Param("username")
 	filter := bson.M{"username": username}
-	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	rawUser, err := dbadapter.UserAccountDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
@@ -221,7 +221,7 @@ func DeleteUserAccount(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errorDeleteAdminAccount})
 		return
 	}
-	errDelOne := dbadapter.CommonDBClient.RestfulAPIDeleteOne(userAccountDataColl, filter)
+	errDelOne := dbadapter.UserAccountDBClient.RestfulAPIDeleteOne(userAccountDataColl, filter)
 	if errDelOne != nil {
 		logger.DbLog.Errorln(errDelOne)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorDeleteUserAccount})
@@ -249,7 +249,7 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 		return
 	}
 	filter := bson.M{"username": username}
-	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	rawUser, err := dbadapter.UserAccountDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
@@ -275,7 +275,7 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 	}
 	postUser.Password = string(hashedPassword)
 	userBsonA := toBsonM(postUser)
-	_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
+	_, err = dbadapter.UserAccountDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorUpdateUserAccount})
@@ -303,7 +303,7 @@ func Login(jwtSecret []byte) gin.HandlerFunc {
 		}
 
 		filter := bson.M{"username": userRequest.Username}
-		rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+		rawUser, err := dbadapter.UserAccountDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
 		if err != nil {
 			logger.DbLog.Errorln(err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
