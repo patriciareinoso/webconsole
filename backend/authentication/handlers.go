@@ -149,6 +149,17 @@ func PostUserAccount(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 		return
 	}
+	filter := bson.M{"username": user.Username}
+	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	if err != nil {
+		logger.DbLog.Errorln(err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
+		return
+	}
+	if len(rawUser) != 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user account already exists"})
+		return
+	}
 
 	rawUsers, err := dbadapter.CommonDBClient.RestfulAPIGetMany(userAccountDataColl, bson.M{})
 	if err != nil {
@@ -170,13 +181,9 @@ func PostUserAccount(c *gin.Context) {
 	}
 	user.Password = string(hashedPassword)
 	userBsonA := toBsonM(user)
-	filter := bson.M{"username": user.Username}
+
 	_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 	if err != nil {
-		//if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		//    logErrorAndWriteResponse("user with given username already exists", http.StatusBadRequest, w)
-		//    return
-		//}
 		logger.DbLog.Errorln(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorCreateUserAccount})
 		return
@@ -241,7 +248,17 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errorInvalidPassword})
 		return
 	}
-	// CHECK IF USER EXISTS
+	filter := bson.M{"username": username}
+	rawUser, err := dbadapter.CommonDBClient.RestfulAPIGetOne(userAccountDataColl, filter)
+	if err != nil {
+		logger.DbLog.Errorln(err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
+		return
+	}
+	if len(rawUser) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": errorUsernameNotFound})
+		return
+	}
 	userAccount.Username = username
 	password := userAccount.Password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -253,7 +270,6 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 	userAccount.Password = string(hashedPassword)
 	userBsonA := toBsonM(userAccount)
 
-	filter := bson.M{"username": username}
 	_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())

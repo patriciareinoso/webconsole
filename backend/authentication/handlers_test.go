@@ -37,6 +37,10 @@ type MockMongoClientRegularUser struct {
 	dbadapter.DBInterface
 }
 
+type MockMongoClientAdminUserCreatesOtherUsers struct {
+	dbadapter.DBInterface
+}
+
 func hashPassword(password string) string {
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(hashed)
@@ -113,6 +117,21 @@ func (m *MockMongoClientRegularUser) RestfulAPIDeleteOne(collName string, filter
 	return nil
 }
 
+func (m *MockMongoClientAdminUserCreatesOtherUsers) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+func (m *MockMongoClientAdminUserCreatesOtherUsers) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
+	rawUsers := []map[string]interface{}{
+		{"username": "janedoe", "password": hashPassword("password123"), "permissions": 1},
+	}
+	return rawUsers, nil
+}
+
+func (m *MockMongoClientAdminUserCreatesOtherUsers) RestfulAPIPost(collName string, filter bson.M, postData map[string]interface{}) (bool, error) {
+	return true, nil
+}
+
 func mockGeneratePassword() (string, error) {
 	return "ValidPass123!", nil
 }
@@ -130,7 +149,7 @@ func TestGetUserAccounts(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.GET("/config/v1/account", GetUserAccounts)
+	AddService(router, mockJWTSecret)
 
 	testCases := []struct {
 		name         string
@@ -207,7 +226,7 @@ func TestGetUserAccount(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.GET("/config/v1/account/:username", GetUserAccount)
+	AddService(router, mockJWTSecret)
 
 	testCases := []struct {
 		name         string
@@ -324,7 +343,7 @@ func TestPostUserAccount(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.POST("/config/v1/account", PostUserAccount)
+	AddService(router, mockJWTSecret)
 
 	testCases := []struct {
 		name                 string
@@ -357,10 +376,20 @@ func TestPostUserAccount(t *testing.T) {
 			expectedBody:         fmt.Sprintf(`{"error":"%s"}`, errorMissingUsername),
 		},
 		{
-			name:                 "AdminUser_CreateSecondUserWithoutPassword",
+			name:                 "AdminUser_CreateSecondUserThatAlreadyExists",
 			username:             "someusername",
 			permissions:          ADMIN_ACCOUNT,
 			dbAdapter:            &MockMongoClientSuccess{},
+			generatePasswordMock: mockGeneratePassword,
+			inputData:            `{"username": "janedoe"}`,
+			expectedCode:         http.StatusBadRequest,
+			expectedBody:         `{"error":"user account already exists"}`,
+		},
+		{
+			name:                 "AdminUser_CreateSecondUserWithoutPassword",
+			username:             "someusername",
+			permissions:          ADMIN_ACCOUNT,
+			dbAdapter:            &MockMongoClientAdminUserCreatesOtherUsers{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin"}`,
 			expectedCode:         http.StatusCreated,
@@ -370,7 +399,7 @@ func TestPostUserAccount(t *testing.T) {
 			name:                 "AdminUser_CreateSecondUserWithPassword",
 			username:             "someusername",
 			permissions:          ADMIN_ACCOUNT,
-			dbAdapter:            &MockMongoClientSuccess{},
+			dbAdapter:            &MockMongoClientAdminUserCreatesOtherUsers{},
 			generatePasswordMock: mockGeneratePassword,
 			inputData:            `{"username": "adminadmin", "password" : "Admin1234"}`,
 			expectedCode:         http.StatusCreated,
@@ -445,7 +474,7 @@ func TestPostUserAccount_CreateFirstUserWithoutHeader(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.POST("/config/v1/account", PostUserAccount)
+	AddService(router, mockJWTSecret)
 	req, _ := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 	w := httptest.NewRecorder()
 
@@ -466,7 +495,7 @@ func TestDeleteUserAccount(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.DELETE("/config/v1/account/:username", DeleteUserAccount)
+	AddService(router, mockJWTSecret)
 
 	testCases := []struct {
 		name         string
@@ -558,7 +587,7 @@ func TestChangePassword(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.POST("/config/v1/account/:username/change_password", ChangeUserAccountPasssword)
+	AddService(router, mockJWTSecret)
 
 	testCases := []struct {
 		name         string
@@ -612,7 +641,7 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUpdateUserAccount),
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
 		},
 		{
 			name:         "RegularUser_DBError",
@@ -621,7 +650,25 @@ func TestChangePassword(t *testing.T) {
 			dbAdapter:    &MockMongoClientDBError{},
 			inputData:    `{"password": "Admin1234"}`,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUpdateUserAccount),
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorRetrieveUserAccount),
+		},
+		{
+			name:         "AdminUser_UserDoesNotExist",
+			username:     "janedoe",
+			permissions:  ADMIN_ACCOUNT,
+			dbAdapter:    &MockMongoClientEmptyDB{},
+			inputData:    `{"password": "Admin1234"}`,
+			expectedCode: http.StatusNotFound,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUsernameNotFound),
+		},
+		{
+			name:         "RegularUser_UserDoesNotExist",
+			username:     "janedoe",
+			permissions:  USER_ACCOUNT,
+			dbAdapter:    &MockMongoClientEmptyDB{},
+			inputData:    `{"password": "Admin1234"}`,
+			expectedCode: http.StatusNotFound,
+			expectedBody: fmt.Sprintf(`{"error":"%s"}`, errorUsernameNotFound),
 		},
 		{
 			name:         "AdminUser_InvalidPassword",
@@ -704,7 +751,7 @@ func TestLogin(t *testing.T) {
 	router := gin.Default()
 	mockJWTSecret := []byte("mockSecret")
 	router.Use(AuthMiddleware(mockJWTSecret))
-	router.POST("/login", Login(mockJWTSecret))
+	AddService(router, mockJWTSecret)
 	generateJWT = mockGenerateJWT
 
 	testCases := []struct {
