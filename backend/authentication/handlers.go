@@ -259,7 +259,13 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": errorUsernameNotFound})
 		return
 	}
-	userAccount.Username = username
+	var postUser configmodels.User
+	err = json.Unmarshal(mapToByte(rawUser), &postUser)
+	if err != nil {
+		logger.AuthLog.Errorln(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errorRetrieveUserAccount})
+		return
+	}
 	password := userAccount.Password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -267,9 +273,8 @@ func ChangeUserAccountPasssword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errorUpdateUserAccount})
 		return
 	}
-	userAccount.Password = string(hashedPassword)
-	userBsonA := toBsonM(userAccount)
-
+	postUser.Password = string(hashedPassword)
+	userBsonA := toBsonM(postUser)
 	_, err = dbadapter.CommonDBClient.RestfulAPIPost(userAccountDataColl, filter, userBsonA)
 	if err != nil {
 		logger.DbLog.Errorln(err.Error())
