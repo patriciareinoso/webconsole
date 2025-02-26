@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-const NAME_PATTERN = "^[a-zA-Z0-9-_]+$"
+const NAME_PATTERN = "^[a-zA-Z][a-zA-Z0-9-_]+$"
 const FQDN_PATTERN = "^([a-zA-Z0-9-]+\\.){2,}([a-zA-Z]{2,6})$"
 
 func isValidName(name string) bool {

@@ -98,14 +98,11 @@ func GetDeviceGroupByName(c *gin.Context) {
 // @Failure      400  {object}  nil  "Bad request"
 // @Failure      401  {object}  nil  "Authorization failed"
 // @Failure      403  {object}  nil  "Forbidden"
+// @Failure      500  {object}  nil  "Failed to delete device group"
 // @Router       /config/v1/device-group/{deviceGroupName}  [delete]
 func DeviceGroupGroupNameDelete(c *gin.Context) {
 	logger.ConfigLog.Debugf("DeviceGroupGroupNameDelete")
-	if ret := DeviceGroupDeleteHandler(c); ret {
-		c.JSON(http.StatusOK, gin.H{})
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{})
-	}
+	DeviceGroupDeleteHandler(c)
 }
 
 // DeviceGroupGroupNamePut -

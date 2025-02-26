@@ -16,6 +16,9 @@ func TestValidateName(t *testing.T) {
 		{"{invalid_name}", false},
 		{"invalid&name", false},
 		{"invalidName(R)", false},
+		{"-invalidname", false},
+		{"_invalidname", false},
+		{"4invalidname", false},
 		{"", false},
 	}
 

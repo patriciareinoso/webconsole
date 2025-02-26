@@ -8,6 +8,7 @@ package configapi
 import (
 	"encoding/json"
 	"math"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -32,34 +33,40 @@ func SetChannel(cfgChannel chan *configmodels.ConfigMessage) {
 	configChannel = cfgChannel
 }
 
-func DeviceGroupDeleteHandler(c *gin.Context) bool {
+func DeviceGroupDeleteHandler(c *gin.Context) {
 	var groupName string
 	var exists bool
-	if groupName, exists = c.Params.Get("group-name"); exists {
-		logger.ConfigLog.Infof("received Delete Group %v from Roc/simapp", groupName)
+	if groupName, exists = c.Params.Get("group-name"); !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "`group-name` is mandatory"})
+		return
 	}
-	updateDeviceGroupInNetworkSlices(groupName)
+	logger.ConfigLog.Infof("received Delete Group %v from Roc/simapp", groupName)
+	if err := updateDeviceGroupInNetworkSlices(groupName); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete device group"})
+		return
+	}
 	var msg configmodels.ConfigMessage
 	msg.MsgType = configmodels.Device_group
 	msg.MsgMethod = configmodels.Delete_op
 	msg.DevGroupName = groupName
 	configChannel <- &msg
 	logger.ConfigLog.Infof("successfully Added Device Group [%v] with delete_op to config channel", groupName)
-	return true
+	c.JSON(http.StatusOK, gin.H{})
 }
 
-func updateDeviceGroupInNetworkSlices(groupName string) {
+func updateDeviceGroupInNetworkSlices(groupName string) error {
 	filterByDeviceGroup := bson.M{"site-device-group": groupName}
 	rawNetworkSlices, err := dbadapter.CommonDBClient.RestfulAPIGetMany(sliceDataColl, filterByDeviceGroup)
 	if err != nil {
 		logger.DbLog.Errorw("failed to retrieve network slices", "error", err)
-		return
+		return err
 	}
+	var messages []*configmodels.ConfigMessage
 	for _, rawNetworkSlice := range rawNetworkSlices {
 		var networkSlice configmodels.Slice
 		if err = json.Unmarshal(configmodels.MapToByte(rawNetworkSlice), &networkSlice); err != nil {
 			logger.DbLog.Errorf("could not unmarshal network slice %v", rawNetworkSlice)
-			continue
+			return err
 		}
 		networkSlice.SiteDeviceGroup = slices.DeleteFunc(networkSlice.SiteDeviceGroup, func(existingDG string) bool {
 			return groupName == existingDG
@@ -70,9 +77,13 @@ func updateDeviceGroupInNetworkSlices(groupName string) {
 			Slice:     &networkSlice,
 			SliceName: networkSlice.SliceName,
 		}
-		configChannel <- msg
-		logger.ConfigLog.Infof("network slice [%v] update sent to config channel", networkSlice.SliceName)
+		messages = append(messages, msg)
 	}
+	for _, msg := range messages {
+		configChannel <- msg
+		logger.ConfigLog.Infof("network slice [%v] update sent to config channel", msg.SliceName)
+	}
+	return nil
 }
 
 func convertToBps(val int64, unit string) (bitrate int64) {

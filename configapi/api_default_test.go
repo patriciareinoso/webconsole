@@ -344,6 +344,12 @@ func TestDeviceGroupDeleteHandler_DeviceGroupExistsInNetworkSlices(t *testing.T)
 			default:
 				t.Error("Expected message in config channel but got none")
 			}
+			select {
+			case msg := <-configChannel:
+				t.Errorf("Unexpected message in config channel: %+v", msg)
+			default:
+				// No more messages, test passes
+			}
 		})
 	}
 }
@@ -412,6 +418,45 @@ func TestDeviceGroupDeleteHandler_DeviceGroupDoesNotExistInNetworkSlices(t *test
 			}
 		})
 	}
+}
+
+func TestDeviceGroupDeleteHandler_InternalErrorFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	AddConfigV1Service(router)
+
+	t.Run("Given error when retrieving NS then no message is sent", func(t *testing.T) {
+		originalDbAdapter := dbadapter.CommonDBClient
+		dbadapter.CommonDBClient = &MockMongoClientDBError{}
+		origChannel := configChannel
+		configChannel = make(chan *configmodels.ConfigMessage, 10)
+		defer func() {
+			configChannel = origChannel
+			dbadapter.CommonDBClient = originalDbAdapter
+		}()
+		req, err := http.NewRequest(http.MethodDelete, "/config/v1/device-group/group1", nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		expectedCode := http.StatusInternalServerError
+		expectedBody := `{"error":"failed to delete device group"}`
+		if expectedCode != w.Code {
+			t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+		}
+		if expectedBody != w.Body.String() {
+			t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+		}
+		select {
+		case msg := <-configChannel:
+			t.Errorf("Unexpected message in config channel: %+v", msg)
+		default:
+			// No more messages, test passes
+		}
+	})
 }
 
 func networkSlice(name string) configmodels.Slice {
