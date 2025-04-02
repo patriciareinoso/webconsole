@@ -19,6 +19,7 @@ linters:
     - dogsled
     - godox
     - gomodguard
+    - govet
     - misspell
     - nakedret
     - predeclared
@@ -28,7 +29,6 @@ linters:
     - whitespace
   disable:
     - errcheck
-    - govet
   settings:
     errcheck:
       check-type-assertions: false
@@ -62,6 +62,8 @@ linters:
         - XXX
     govet:
       enable-all: true
+      disable:
+        - fieldalignment
       settings:
         printf:
           funcs:
